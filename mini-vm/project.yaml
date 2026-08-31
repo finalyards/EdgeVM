@@ -4,7 +4,7 @@
 #     Until there is one(?), see -> https://github.com/lima-vm/lima/blob/master/templates/default.yaml
 
 #
-# edge-vm/project.yaml
+# mini-vm/project.yaml
 #
 
 #
@@ -21,14 +21,11 @@ base: "template:ubuntu-lts"
 cpus: 4
 memory: "8GiB"
   # 8GB of RAM needed for Remote Development
-disk: "40GiB"
-  # 20GB falls short with Remote Development and ESP-IDF Rust projects
-  # If you use multiple ESP-IDF versions (e.g. 5.5.5, 6.0), each takes ~6..8 GB (~/.espressif).
+disk: "20GiB"
 
 # macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
 vmType: "vz"
 mountType: "virtiofs"
-
 mountInotify: true
 
 user:
@@ -45,7 +42,7 @@ user:
 
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
-  localPort: 49925
+  localPort: 49924
 
 portForwards:
   # Silence (some) warnings, when creating the VM
@@ -60,10 +57,18 @@ portForwards:
   - guestPortRange: [1024, 65535]
     proto: "tcp"
 
+# Install:
+#   - PodMan
+#   - Vitest (for running tests)
+#
+#   Note:
+#     Deployments will also need 'cloudflared' (Cloudflare tunnel) to be set up, but it's intentionally not installed
+#     here. You don't need it for development. See 'Tunnel'.
+#
 # Template variables (Lima docs and a test run):
 #   {{.Home}}   /home/lima
-#   {{.Name}}   edge-vm
-#   {{.Hostname}} lima-edge-vm
+#   {{.Name}}   mini-vm
+#   {{.Hostname}} lima-mini-vm
 #   {{.UID}}    502
 #   {{.User}}   lima
 #   {{.Param.Key}} <no value>
@@ -79,17 +84,40 @@ provision:
       export DEBIAN_FRONTEND=noninteractive
       
       apt-get update
-      apt install -y curl git pkg-config libssl-dev python3 python3-venv cmake \
-        make \
-        build-essential clang
-  
+      apt install -y curl git pkg-config libssl-dev
+
+      #🟡 Podman
+      #   ❗️NOTE: THIS IS PODMAN 5.7 FOR NOW (6.0.2 not available via 'apt'; 31-Aug-26, 29-Jul-26)
+      #apt install -y podman podman-compose
+
+      #🟡 Node.js via NodeSource
+      curl -fsSL https://deb.nodesource.com/setup_26.x | bash -
+      apt install -y nodejs
+      
+      # 🟡Optimize 'node_modules' speed
+      # Note: could do this in the 'mounts' section, once we in general can do mounts here... (the lack of '--mountOnly' in YAML)
+      touch ~/system.2
+      grep -q "tmpfs_abc" /etc/fstab || (
+        touch ~/system.3
+        _MP=${_PROJ_HOST_PATH}/node_modules
+        install -d $_MP
+        _GID=$(id -g {{.User}})
+        touch ~/system.4
+
+        cat >> /etc/fstab << ABC
+        
+      # Optimize 'node_modules' within the VM
+      tmpfs_abc $_MP tmpfs user,noauto,exec,rw,size=800m,uid={{.UID}},gid=$_GID 0 0
+      ABC
+ 
+        systemctl daemon-reload
+        mount $_MP
+      )
+      
       # 🟡Just
       apt install -y just
 
-      # 🟡Convenience
-      apt install -y jq tree
-
-      # Signal to the 'user' mode installs (below) that we finished.
+      # DEBUG
       touch {{.Home}}/system.done
 
   - mode: user
@@ -100,15 +128,17 @@ provision:
       # Check that 'system' provisioning succeeded
       test -f ~/system.done
 
-      #🔵 rustup (Rust, Cargo)
+      #🔵 rustup (Rust, Cargo) + WASM tools
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
-        --default-toolchain stable -y --profile minimal
+        --default-toolchain nightly -y --profile minimal
 
       . ~/.cargo/env
       
       install -d ~/.local/share/bash-completion/completions
       rustup completions bash       > ~/.local/share/bash-completion/completions/rustup
       rustup completions bash cargo > ~/.local/share/bash-completion/completions/cargo
+
+      cargo install wasm-pack
 
       #🔵 A common, VM-internal 'target' (less sharing; better performance)
       #   NOTE: Do not use '/tmp/target' - it's mounted as a memory disk in Ubuntu template and will exhaust.
@@ -121,44 +151,18 @@ provision:
       [build]
       target-dir = "{{.Home}}/target"
       EOF1
-
-      #🔵 ESP32-C6 target
-      rustup target add riscv32imac-unknown-none-elf
-
-      #🔵 Some often used tools ('ldproxy' needed for ESP-IDF builds with 'global')
-      cargo install --locked ldproxy
-
-      #🔵 Set up 'espflash' remoting; -> https://github.com/finalyards-org/probe-rs-remote
-      #   The user is expected to modify '~/.bashrc' and '~/.ssh/config' manually.
-      #
-      install -d ~/bin
-
-      cat >> ~/.bashrc <<'EOF2'
-      # 'probe-rs' and 'espflash' remotely
-      export PROBE_RS_REMOTE=probe-rs@192.168.1.97  # EDIT THIS TO POINT TO YOUR DEVICE
-      export PATH=$PATH:$HOME/bin
-      EOF2
-
-      curl -fsSL -o ~/bin/espflash-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/espflash-remote.sh
-      chmod a+x ~/bin/espflash-remote.sh
   
-      (cd ~/bin && ln -s espflash-remote.sh espflash )
+      #🔵 Enable 'npm -g' without 'sudo'
+      install -d "$HOME/.npm-packages"
+      npm config set prefix "$HOME/.npm-packages"
 
-      # Create an ssh key for later (manual) pairing.
+      cat >> ~/.bashrc << 'EOF'
+
+      # npm installed to a custom location
       #
-      # After this, one can avoid being asked pw's, by:
-      #   <<
-      #     ssh-copy-id probe-rs@192.168.1.xx
-      #   <<
-      ssh-keygen < /dev/zero > /dev/null \
-        -t rsa -C "for 'espflash' remote" -q -N ""
-
-      cat >> ~/.ssh/config <<'EOF3'
-      # Block quantum warning on using 'espflash' remotely
-      # v-- EDIT THE IP TO MATCH YOUR DEVICE!!
-      Match host 192.168.1.97
-        WarnWeakCrypto no-pq-kex
-      EOF3
-
+      export PATH="$PATH:$HOME/.npm-packages/bin"
+      
+      EOF
+      
       # DEBUG
       touch ~/user.done
