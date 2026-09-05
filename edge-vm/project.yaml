@@ -1,20 +1,27 @@
 # yaml-language-server: $schema=none
 #
-# Note: There does not seem to be a schema available for Lima 2.2.0.
-#     Until there is one(?), see -> https://github.com/lima-vm/lima/blob/master/templates/default.yaml
+# Note: There is no schema available for Lima 2.2.0.
+#     Until there is one (?), see -> https://github.com/lima-vm/lima/blob/master/templates/default.yaml
+#
+minimumLimaVersion: 2.2.0
 
-#
-# edge-vm/project.yaml
-#
+# macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
+vmType: "vz"
+# Note: 'virtiofs' is "experimental on Linux [host?]" (2.2.0)
+mountType: "virtiofs"
 
+# Instead of a template, we use a specific image. This is vital for embedded development (USB/IP client) dependencies
+# (linux-tools-generic, vhci-hcd).
 #
-# See: https://github.com/lima-vm/lima/blob/master/templates/ubuntu-26.04.yaml
-#     - https://github.com/lima-vm/lima/blob/master/templates/_images/ubuntu-26.04.yaml
-#     - https://github.com/lima-vm/lima/blob/master/templates/_default/mounts.yaml
+# According to 'google.ai', it's difficult to add the kernel extensions afterwards.
 #
-#   NOTE: Omitting the 'mounts' (which we don't use) causes the _prompt_ of the VM to lose colour, and just... be awkward.
-#
-base: "template:ubuntu-lts"
+images:
+  - location: "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-arm64.img"
+    arch: "aarch64"
+
+  # NOTE: Intel NOT TESTED
+  - location: "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
+    arch: "x86_64"
 
 # System Resources
 #
@@ -25,11 +32,11 @@ disk: "40GiB"
   # 20GB falls short with Remote Development and ESP-IDF Rust projects
   # If you use multiple ESP-IDF versions (e.g. 5.5.5, 6.0), each takes ~6..8 GB (~/.espressif).
 
-# macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
-vmType: "vz"
-mountType: "virtiofs"
-
-mountInotify: true
+# Marked as: "EXPERIMENTAL" (2.2.0)
+#
+# DISABLED because: We might not actually need it (unlike in, say, web development); there have been some conflict
+#   dialogs in Rust Rover IDE (memory vs. disk content). #undecided
+#mountInotify: true
 
 user:
   name: "lima"
@@ -42,10 +49,21 @@ user:
 #  - location: "/Users/xxx/Git/Some"
 #    mountPoint: "/home/lima/Some"
 #    writable: true
+#    sshfs:
+#     - cache: false
+#    9p:
+#     - cache: none
+
+param:
+  # To enable remoting, before you create a VM, edit this line or use '--param PROBE_RS_REMOTE=...' to start the VM.
+  #PROBE_RS_REMOTE: probe-rs@192.168.1.71
 
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
   localPort: 49925
+  # Rust Rover Remote Development needs that the VM is approachable only using the '~/.ssh/config'.
+  loadDotSSHPubKeys: true
+  #   tbd. Does this eliminate the need to edit the '~/.ssh/config'?
 
 portForwards:
   # Silence (some) warnings, when creating the VM
@@ -60,6 +78,9 @@ portForwards:
   - guestPortRange: [1024, 65535]
     proto: "tcp"
 
+#---
+# Provisioning scripts
+#
 # Template variables (Lima docs and a test run):
 #   {{.Home}}   /home/lima
 #   {{.Name}}   edge-vm
@@ -75,30 +96,24 @@ provision:
   - mode: system
     script: |
       #!/bin/bash
-      set -eu -o pipefail
       export DEBIAN_FRONTEND=noninteractive
-      
-      apt-get update
-      apt install -y curl git pkg-config libssl-dev python3 python3-venv cmake \
-        make \
-        build-essential clang
-  
-      # 🟡Just
-      apt install -y just
+      apt update
 
-      # 🟡Convenience
-      apt install -y jq tree
+  # ESP-IDF + bindgen dependencies
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt install -y curl git pkg-config libssl-dev python3 python3-venv cmake build-essential clang make
 
-      # Signal to the 'user' mode installs (below) that we finished.
-      touch {{.Home}}/system.done
+      touch {{.Home}}/DEBUG.system.1.done
 
+  # Rust and Cargo (general)
   - mode: user
     script: |
       #!/bin/bash
-      set -eu -o pipefail
-
-      # Check that 'system' provisioning succeeded
-      test -f ~/system.done
+      set -eux -o pipefail
 
       #🔵 rustup (Rust, Cargo)
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
@@ -111,9 +126,10 @@ provision:
       rustup completions bash cargo > ~/.local/share/bash-completion/completions/cargo
 
       #🔵 A common, VM-internal 'target' (less sharing; better performance)
-      #   NOTE: Do not use '/tmp/target' - it's mounted as a memory disk in Ubuntu template and will exhaust.
+      #   NOTE: Do not use '/tmp/target' - it's mounted as a memory disk in Ubuntu template and could fill up.
       install -d ~/target
-      
+
+      # Note: Lima VM guidance asks to make the scripts idempotent. This one is not; let's see if we face reruns..?
       CONFIG_TOML=~/.cargo/config.toml
       [ ! -f "$CONFIG_TOML" ] || { printf >&2 "${CONFIG_TOML} already exists"; false; }
   
@@ -122,43 +138,161 @@ provision:
       target-dir = "{{.Home}}/target"
       EOF1
 
+  # Rust and Cargo (ESP32-C6 specific)
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
       #🔵 ESP32-C6 target
       rustup target add riscv32imac-unknown-none-elf
 
-      #🔵 Some often used tools ('ldproxy' needed for ESP-IDF builds with 'global')
+      #🔵 CLI tools ('ldproxy' needed for ESP-IDF builds with 'global')
       cargo install --locked ldproxy
 
-      #🔵 Set up 'espflash' remoting; -> https://github.com/finalyards-org/probe-rs-remote
-      #   The user is expected to modify '~/.bashrc' and '~/.ssh/config' manually.
-      #
-      install -d ~/bin
+  # USB/IP client
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      export DEBIAN_FRONTEND=noninteractive
 
-      cat >> ~/.bashrc <<'EOF2'
-      # 'probe-rs' and 'espflash' remotely
-      export PROBE_RS_REMOTE=probe-rs@192.168.1.97  # EDIT THIS TO POINT TO YOUR DEVICE
-      export PATH=$PATH:$HOME/bin
-      EOF2
+      apt install -y linux-tools-common
+      
+      modprobe vhci-hcd
+      echo vhci-hcd >> /etc/modules
+
+      touch {{.Home}}/DEBUG.system.3.done
+
+  # Direct 'probe-rs' (USB/IP)
+  #
+  # Note: We might make this step optional, eventually, so that from the *command line* (or from 'custom.params') one can steer its inclusion.
+  #     For example, if one uses probe-rs remoting, having also the local tool may be unnecessary. Same for 'espflash'. tbd.
+  #
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Set up 'udev' rules and provide user-level access to the devices. |1|
+      #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
+      curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
+
+      # Above does not cover '10c4:ea60'. Let's do it.
+      echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666", GROUP="plugdev"' \
+        | sudo tee /etc/udev/rules.d/99-cp210x.rules
+
+      usermod -a -G plugdev {{.User}}
+
+      # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
+      udevadm control --reload-rules
+  #
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # faster option
+      #curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+
+      # build from source
+      cargo +stable install probe-rs-tools --locked
+
+  # Direct 'espflash' (USB/IP)
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      cargo +stable install espflash --locked
+
+      espflash completions bash > ~/.espflash-completion.bash
+
+      cat >> ~/.bashrc <<EOF1
+      
+      # Enable command line completion for espflash.
+      if [ -f ~/.espflash-completion.bash ]; then
+        source ~/.espflash-completion.bash
+      fi
+      EOF1
+
+  # tbd. MAKE OPTIONAL: Into a file that can be manually run if needed. (~/.prep/remoting.sh)
+  #
+  # Preparedness for 'espflash' and 'probe-rs' remoting.
+  #
+  # TO ENABLE THIS,
+  #   - edit the 'param.PROBE_RS_REMOTE' entry above, to point to your device.
+  #   - if you already created an 'edge-vm' VM, stop, delete and restart it.
+  #
+  #     NOTE: Why recreate? We use the default 'user+setup' mode (not 'user+boot'), meaning this script will only get
+  #         run _once_. This helps keep it simpler (no idempotency required), and once you can set custom env.vars,
+  #         (in a separate file), this should not be a concern. You can _already_ set the env var from the 'limactl start'
+  #         command used for creating the VM (a bit of hack, but...).
+  #
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      env > {{.Home}}/DEBUG.env
+        #TEMP
+
+      #🔵 Skip if disabled
+      #
+      # Note:
+      #   - {{.Param.xxx}} gives "<no value>" when empty.
+      #   - ${PARAM_xxx} gives ...tbd.
+      #
+      [ -z ${PARAM_PROBE_RS_REMOTE} ] && { \
+        touch {{.Home}}/DEBUG.remoting.disabled
+        printf >&2 "probe-rs/espflash remoting disabled"; exit 0; \
+      }
+      touch {{.Home}}/DEBUG.remoting.enabled
+
+      #🔵 Set in '.bashrc'
+      cat >> ~/.bashrc <<EOF1
+
+      export PROBE_RS_REMOTE={{.Param.PROBE_RS_REMOTE}}
+      EOF1
+      
+      #🔵 Set up '~/bin' if not already there
+      [ -d ~/bin ] || { \
+        install -d ~/bin; \
+        echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc; \
+      }
+
+      #🔵 Prepare for remoting; -> https://github.com/finalyards-org/probe-rs-remote
+      #
+      curl -fsSL -o ~/bin/probe-rs-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/probe-rs-remote.sh
+      chmod a+x ~/bin/probe-rs-remote.sh
 
       curl -fsSL -o ~/bin/espflash-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/espflash-remote.sh
       chmod a+x ~/bin/espflash-remote.sh
-  
-      (cd ~/bin && ln -s espflash-remote.sh espflash )
 
       # Create an ssh key for later (manual) pairing.
       #
       # After this, one can avoid being asked pw's, by:
       #   <<
-      #     ssh-copy-id probe-rs@192.168.1.xx
+      #     ssh-copy-id $PROBE_RS_REMOTE
       #   <<
       ssh-keygen < /dev/zero > /dev/null \
         -t rsa -C "for 'espflash' remote" -q -N ""
 
-      cat >> ~/.ssh/config <<'EOF3'
+      cat >> ~/.ssh/config <<EOF3
       # Block quantum warning on using 'espflash' remotely
-      # v-- EDIT THE IP TO MATCH YOUR DEVICE!!
-      Match host 192.168.1.97
+      Match host ${PARAM_PROBE_RS_REMOTE#*@}
         WarnWeakCrypto no-pq-kex
       EOF3
 
-      # DEBUG
-      touch ~/user.done
+  # DEBUG. Finish up.
+  # Note: Lima VM first runs all 'mode: system' scripts, then all 'mode: user'. Sequentially, in order.
+  #
+  - mode: system
+    script: |
+      #!/bin/bash
+      touch {{.Home}}/DEBUG.system.all.done
+
+  - mode: user
+    script: |
+      #!/bin/bash
+      touch ~/DEBUG.user.all.done

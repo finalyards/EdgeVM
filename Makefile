@@ -35,10 +35,13 @@ export SSH_CONFIG_BLOCK
 _YAML:=$(VM_NAME)/project.yaml
 	# {xxx}-vm/project.yaml
 
+#---
 # Shorthands
+#
 edge mini:
 	@$(MAKE) vm VM_NAME=$@-vm
 
+#---
 # Note: Also creates '_VM_SSH_CONFIG', but we cannot easily express that in 'make' < v4 syntax. Does not matter,
 #		trust that it gets done!
 #
@@ -60,7 +63,7 @@ endif
     	{ printf >&2 "❗INTERNAL ERROR: didn't modify '~/.ssh/config' properly!\n"; false; }
 
 	@# So you can mount the folders
-	@limactl stop $(VM_NAME)
+	limactl stop $(VM_NAME)
 
 limactl:
 	@which limactl >/dev/null || \

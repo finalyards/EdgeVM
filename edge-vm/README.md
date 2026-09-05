@@ -66,3 +66,11 @@ You can use an IDE on the host, and build/flash on the VM terminal.
 
 But you can also set up a Remote Debugging IDE that runs *within* the VM. See `DEVS/` folder (informal notes) for guidance.
 
+
+
+<!--
+## References
+
+- [`probe-rs`](https://probe.rs/docs/overview/about-probe-rs/)
+
+-->
