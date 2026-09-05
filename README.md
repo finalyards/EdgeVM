@@ -13,17 +13,26 @@ Collection of Lima VMs.
 
 	- Embassy
 	- ESP-IDF; esp-idf-hal, esp-idf-sys, esp-idf-svc
-
-	Can also be used for `no_std` (bare metal) development.
+	- USBIP client support
 
 - [mini-vm](./mini-vm/)
 
 	For Linux development, including:
 	
-	- Rust
-		- including targeting WASM
+	- Rust, 
+		- including WASM target
 	- node.js, npm
 
+<!-- tbd.
+- [cloud-vm](./cloud-vm/)
+
+	For cloud development, including:
+	
+	- Rust, 
+		- with WASM target (for Cloudflare workers)
+	- node.js, npm
+
+-->
 - ...
 
 You can do your own setups easily, or use these as-is.
@@ -31,13 +40,26 @@ You can do your own setups easily, or use these as-is.
 
 ## Requirements
 
+The author develops this on macOS `aarm64`. 
+
+>Using on Linux and/or Windows host is likely possible, but not tested.
+
 - GNU Make (3.81)
 
-	This repo is made primarily for use on macOS. To have `make` available, install the Apple Command line Tools.
+	Part of Apple Command Line Tools:
 	
 	```
-	% xcode-select --install 
+	% xcode-select --install
 	```
+
+### USB/IP daemon (optional)
+
+If you plan to flash devices from the VM, you'll need `usbipd` running on the host.
+
+- [ ] Please see guidance in [`Setting up usbipd`](./Setting up usbipd.md) before proceeding.
+
+<!-- tbd. bring proper instruction to the root; should we cover Windows and Linux as well???
+-->
 
 ## Steps
 
