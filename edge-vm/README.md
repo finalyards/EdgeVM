@@ -2,75 +2,32 @@
 
 Follow the main `README` to set up the VM.
 
-## Using remote `probe-rs` and/or `espflash`
 
-Since you are developing within a VM, you cannot simply plug in a target device (Lima VM does not provide USB pass-throughs).
+## Preparing to flash
 
-There are three solutions to this.
+You have two options here:
 
-1. `probe-rs` has built-in remoting
+### A. USB/IP
 
-2. USB/IP carries USB protocol over the IP
+<!-- tbd. image here! -->
 
-	Works but can be slow. IP protocol is not well adjusted to a lot of small, back and forth messages.
+With USB/IP, you run the USB protocol - over IP - to within the VM, where it gets turned back to USB packets. You then run *normal* developer tools (`probe-rs` and `espflash` are frequently used in the Rust ecosystem). 
 
-3. [probe-rs-remote](https://github.com/finalyards-org/probe-rs-remote)
+This is highly useful for local installations, but loses speed when applied over, say, a WLAN connection. This is because the USB and IP are *fundamentally different* protocols, and the traffic often ends up being short packages back and forth (polling-like), sensitive more on latency than bandwidth.
 
-	What the author uses. Proxies either `probe-rs` and/or `espflash` commands via a proxy script within the VM, over ssh, to the physical device running the real things.
+See [Using `usbip`](./Using usbip.md) for more details.
 
-### Steps to use `probe-rs-remote`
+### B. Remoting
 
-Your remote device has an IP, e.g. `192.168.1.97`. Edit this in the `.bashrc` and `~/.ssh/config` files, within the VM image.
+<!-- tbd. image here! -->
 
-Then:
+With remoting, either [using built-in](https://bugadani.github.io/rust/probe-rs/2025/02/20/probe-rs-server.html) or [`probe-rs-remote`](https://github.com/finalyards-org/probe-rs-remote/blob/main/README.md), you gain more speed (and maybe reliability). This means you might have a separate physical computer (e.g. a Raspberry Pi) that connects to your devkits. 
 
-```
-$ espflash board-info
-[...]
-[2026-08-31T16:36:01Z INFO ] Serial port: '/dev/ttyUSB0'
-[2026-08-31T16:36:01Z INFO ] Connecting...
-[2026-08-31T16:36:02Z INFO ] Using flash stub
-Chip type:         esp32c6 (revision v0.2)
-Crystal frequency: 40 MHz
-Flash size:        4MB
-Features:          WiFi 6, BT 5
-MAC address:       fc:01:2c:f9:09:b4
+The author uses this mode, whenever there are custom electronics involved. It eliminates anxiety nicely!
 
-Security Information:
-=====================
-Flags: 0x00000000 (0)
-Key Purposes: [0, 0, 0, 0, 0, 0, 12]
-Chip ID: 13
-API Version: 0
-Secure Boot: Disabled
-Flash Encryption: Disabled
-SPI Boot Crypt Count (SPI_BOOT_CRYPT_CNT): 0x0
-
-```
+See [Using remoting](./Using remoting.md) for more details.
 
 
-## Advanced (optional)
+## Rust Rover Remote Development
 
-To not be asked for passwords:
-
-```
-$ ssh-copy-id probe-rs@192.168.1.97
-```
-
-This exchanges keys with the remote device so that plain `ssh` just works. Recommended!
-
-
-## Remote Development (IDE; optional)
-
-You can use an IDE on the host, and build/flash on the VM terminal.
-
-But you can also set up a Remote Debugging IDE that runs *within* the VM. See `DEVS/` folder (informal notes) for guidance.
-
-
-
-<!--
-## References
-
-- [`probe-rs`](https://probe.rs/docs/overview/about-probe-rs/)
-
--->
+*tbd.*

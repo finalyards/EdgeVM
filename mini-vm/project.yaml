@@ -2,12 +2,13 @@
 #
 # Note: There does not seem to be a schema available for Lima 2.2.0.
 #     Until there is one(?), see -> https://github.com/lima-vm/lima/blob/master/templates/default.yaml
+#
+minimumLimaVersion: 2.0.0
 
-#
-# mini-vm/project.yaml
-#
+# macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
+vmType: "vz"
+mountType: "virtiofs"
 
-#
 # See: https://github.com/lima-vm/lima/blob/master/templates/ubuntu-26.04.yaml
 #     - https://github.com/lima-vm/lima/blob/master/templates/_images/ubuntu-26.04.yaml
 #     - https://github.com/lima-vm/lima/blob/master/templates/_default/mounts.yaml
@@ -23,9 +24,6 @@ memory: "8GiB"
   # 8GB of RAM needed for Remote Development
 disk: "20GiB"
 
-# macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
-vmType: "vz"
-mountType: "virtiofs"
 mountInotify: true
 
 user:

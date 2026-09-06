@@ -1,10 +1,8 @@
-## Remote Development (optional)
+## Remote Development
 
-It's possible to run the IDE on the host side, and do builds, deployments etc. in a separate terminal within the VM. But this has its shortcomings.
+If you feel you want to try Remote Development, here goes. 
 
-The author does not currently remember them clearly. 🤪 ..but if you feel you want to try Remote Development, here goes.
-
-This is with IntelliJ IDE. Other IDEs (Visual Code) would work differently.
+This is with Rust Rover. Other IDEs (Visual Code) would work differently.
 
 
 ### Disclaimer: it's in beta
@@ -19,7 +17,7 @@ Also overall, you'll get *two* IDEs, one handling the files in host, another in 
 
 ### Requirement: direct `ssh` access
 
-IntelliJ Remote Development cannot (as of Aug'26) pick up the `~/.lima/$(VM_NAME)/ssh.config` configurations that Lima VM automatically does (HINT: It would be great if it did!). This is why our `~Makefile` has bound them to your main `~/.ssh/config`.
+IntelliJ Remote Development cannot (as of Aug'26) pick up the `~/.lima/$(VM_NAME)/ssh.config` configurations that Lima VM automatically does (HINT: It would be great if it did!). This is why our `Makefile` has bound them to your main `~/.ssh/config`.
 
 You should be able to:
 

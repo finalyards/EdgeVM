@@ -157,11 +157,12 @@ provision:
       set -eux -o pipefail
       export DEBIAN_FRONTEND=noninteractive
 
-      apt install -y linux-tools-common
+      apt install -y linux-tools-common linux-tools-$(uname -r)
       
       modprobe vhci-hcd
-      echo vhci-hcd >> /etc/modules
-
+      # Ubuntu 26.04 use of '/etc/modules' is replaced by this.
+      echo "vhci-hcd" > /etc/modules-load.d/usbip.conf
+  
       touch {{.Home}}/DEBUG.system.3.done
 
   # Direct 'probe-rs' (USB/IP)
@@ -178,14 +179,12 @@ provision:
       #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
       curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
 
-      # Above does not cover '10c4:ea60'. Let's do it.
-      echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666", GROUP="plugdev"' \
-        | sudo tee /etc/udev/rules.d/99-cp210x.rules
-
+      # Though we'd only use 'plugdev' in the udev rules (above), '/dev/ttyUSB0' may be in the 'dialout' group. Allow both.
       usermod -a -G plugdev {{.User}}
+      usermod -a -G dialout {{.User}}
 
       # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
-      udevadm control --reload-rules
+      udevadm control --reload
   #
   - mode: user
     script: |
