@@ -160,7 +160,7 @@ provision:
       apt install -y linux-tools-common linux-tools-$(uname -r)
       
       modprobe vhci-hcd
-      # Ubuntu 26.04 use of '/etc/modules' is replaced by this.
+      # Ensure the module loads on restarts. Ubuntu 26.04 uses this instead of '/etc/modules'.
       echo "vhci-hcd" > /etc/modules-load.d/usbip.conf
   
       touch {{.Home}}/DEBUG.system.3.done
