@@ -1,0 +1,46 @@
+{
+  "devices" : [
+    {
+      "currentConfiguration" : 1,
+      "descendantDrivers" : [
+        {
+          "className" : "AppleUSBCDCCompositeDevice",
+          "depth" : 1
+        },
+        {
+          "className" : "AppleUSBACMControl",
+          "depth" : 2
+        },
+        {
+          "className" : "AppleUSBACMData",
+          "depth" : 2
+        },
+        {
+          "className" : "IOSerialBSDClient",
+          "depth" : 3
+        }
+      ],
+      "deviceClass" : 239,
+      "deviceProtocol" : 1,
+      "deviceSubClass" : 2,
+      "interfaces" : [
+
+      ],
+      "kernelDriverAttached" : true,
+      "locationID" : "1100000",
+      "pluginResult" : "kIOReturnNoResources (0xe00002be)",
+      "productID" : 4097,
+      "productName" : "USB JTAG_serial debug unit",
+      "registryClass" : "IOUSBHostDevice",
+      "serialNumber" : "FC:01:2C:F9:04:38",
+      "vendorID" : 12346,
+      "vendorName" : "Espressif",
+      "verdict" : "BLOCKED — kernel driver owns the device; requires DriverKit-level rebinding"
+    }
+  ],
+  "euid" : 502,
+  "osVersion" : "Version 27.0 (Build 26A5425a)",
+  "seizeEnabled" : false,
+  "timestamp" : "2026-09-09T07:22:40Z",
+  "variant" : "sandboxed-only"
+}

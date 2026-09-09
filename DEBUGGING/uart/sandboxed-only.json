@@ -1,0 +1,38 @@
+{
+  "devices" : [
+    {
+      "currentConfiguration" : 1,
+      "descendantDrivers" : [
+        {
+          "className" : "IOUserSerial",
+          "depth" : 2
+        },
+        {
+          "className" : "IOSerialBSDClient",
+          "depth" : 3
+        }
+      ],
+      "deviceClass" : 0,
+      "deviceProtocol" : 0,
+      "deviceSubClass" : 0,
+      "interfaces" : [
+
+      ],
+      "kernelDriverAttached" : true,
+      "locationID" : "1100000",
+      "pluginResult" : "kIOReturnNoResources (0xe00002be)",
+      "productID" : 60000,
+      "productName" : "CP2102N USB to UART Bridge Controller",
+      "registryClass" : "IOUSBHostDevice",
+      "serialNumber" : "0214140d08a2ef11a814926661ce3355",
+      "vendorID" : 4292,
+      "vendorName" : "Silicon Labs",
+      "verdict" : "BLOCKED — kernel driver owns the device; requires DriverKit-level rebinding"
+    }
+  ],
+  "euid" : 502,
+  "osVersion" : "Version 27.0 (Build 26A5425a)",
+  "seizeEnabled" : false,
+  "timestamp" : "2026-09-09T07:32:45Z",
+  "variant" : "sandboxed-only"
+}
