@@ -55,14 +55,14 @@ user:
 #     - cache: none
 
 param:
-  # To enable remoting, before you create a VM, edit this line or use '--param PROBE_RS_REMOTE=...' to start the VM.
-  #PROBE_RS_REMOTE: probe-rs@192.168.1.71
+  # Expects a certain name for the Raspberry Pi. Override this by '--param PROBE_RS_REMOTE=...'.
+  PROBE_RS_REMOTE: probe-rs@rpi.local
 
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
   localPort: 49925
   # Rust Rover Remote Development needs that the VM is approachable only using the '~/.ssh/config'.
-  loadDotSSHPubKeys: true
+  #?loadDotSSHPubKeys: true
   #   tbd. Does this eliminate the need to edit the '~/.ssh/config'?
 
 portForwards:
@@ -215,13 +215,11 @@ provision:
       fi
       EOF1
 
-  # tbd. MAKE OPTIONAL: Into a file that can be manually run if needed. (~/.prep/remoting.sh)
+  # Client side support for 'espflash' and 'probe-rs' remoting.
   #
-  # Preparedness for 'espflash' and 'probe-rs' remoting.
-  #
-  # TO ENABLE THIS,
+  # TO USE THIS,
   #   - edit the 'param.PROBE_RS_REMOTE' entry above, to point to your device.
-  #   - if you already created an 'edge-vm' VM, stop, delete and restart it.
+  #   - if you already created an 'edge-vm' VM, stop, delete and recreate it.
   #
   #     NOTE: Why recreate? We use the default 'user+setup' mode (not 'user+boot'), meaning this script will only get
   #         run _once_. This helps keep it simpler (no idempotency required), and once you can set custom env.vars,
@@ -282,6 +280,22 @@ provision:
       Match host ${PARAM_PROBE_RS_REMOTE#*@}
         WarnWeakCrypto no-pq-kex
       EOF3
+
+  # Let host resolved e.g. 'rpi.local' for remoted probe-rs / espflash use, without needing the exact IP.
+  #
+  # Note: It's nice we can do this without a bridging network adapter. We config 'systemd-resolved' to pass '.local'
+  #       domains to the host (DNS), which does have mDNS and is able to resolve the IP.
+  #
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      #exists: mkdir -p /etc/systemd/resolved.conf.d
+      echo -e "[Resolve]\nDomains=~local" | sudo tee /etc/systemd/resolved.conf.d/probe-rs-local.conf
+
+      # Isn't strictly needed: Makefile would stop the VM for mounts (but that may change)
+      systemctl restart systemd-resolved
 
   # DEBUG. Finish up.
   # Note: Lima VM first runs all 'mode: system' scripts, then all 'mode: user'. Sequentially, in order.
