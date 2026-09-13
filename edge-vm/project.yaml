@@ -129,7 +129,6 @@ provision:
       #   NOTE: Do not use '/tmp/target' - it's mounted as a memory disk in Ubuntu template and could fill up.
       install -d ~/target
 
-      # Note: Lima VM guidance asks to make the scripts idempotent. This one is not; let's see if we face reruns..?
       CONFIG_TOML=~/.cargo/config.toml
       [ ! -f "$CONFIG_TOML" ] || { printf >&2 "${CONFIG_TOML} already exists"; false; }
   
@@ -167,53 +166,54 @@ provision:
 
   # Direct 'probe-rs' (USB/IP)
   #
-  # Note: We might make this step optional, eventually, so that from the *command line* (or from 'custom.params') one can steer its inclusion.
-  #     For example, if one uses probe-rs remoting, having also the local tool may be unnecessary. Same for 'espflash'. tbd.
+  # tbd. Make this step optional, so that from the *command line* (or from 'custom.params') can steer its inclusion.
   #
-  - mode: system
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-
-      # Set up 'udev' rules and provide user-level access to the devices. |1|
-      #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
-      curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
-
-      # Though we'd only use 'plugdev' in the udev rules (above), '/dev/ttyUSB0' may be in the 'dialout' group. Allow both.
-      usermod -a -G plugdev {{.User}}
-      usermod -a -G dialout {{.User}}
-
-      # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
-      udevadm control --reload
+  # Note: Remoting to a macOS USB/IP host (open source) is still in its infancy, and *might not emerge* (Apple policies
+  #       favor commercial application bundles in this). If there's indication that a local (same machine) macOS
+  #       USB/IP connection would be usable (with high enough baud rates), re-enable this.
   #
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-
-      # faster option
-      #curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
-
-      # build from source
-      cargo +stable install probe-rs-tools --locked
+  #|- mode: system
+  #|  script: |
+  #|    #!/bin/bash
+  #|    set -eux -o pipefail
+  #|
+  #|    # Set up 'udev' rules and provide user-level access to the devices. |1|
+  #|    #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
+  #|    curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
+  #|
+  #|    # Though we'd only use 'plugdev' in the udev rules (above), '/dev/ttyUSB0' may be in the 'dialout' group. Allow both.
+  #|    usermod -a -G plugdev {{.User}}
+  #|    usermod -a -G dialout {{.User}}
+  #|
+  #|    # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
+  #|    udevadm control --reload
+  #|#
+  #|- mode: user
+  #|  script: |
+  #|    #!/bin/bash
+  #|    set -eux -o pipefail
+  #|
+  #|    # faster than building from source
+  #|    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
 
   # Direct 'espflash' (USB/IP)
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-
-      cargo +stable install espflash --locked
-
-      espflash completions bash > ~/.espflash-completion.bash
-
-      cat >> ~/.bashrc <<EOF1
-      
-      # Enable command line completion for espflash.
-      if [ -f ~/.espflash-completion.bash ]; then
-        source ~/.espflash-completion.bash
-      fi
-      EOF1
+  #
+  # See comments above (on USB/IP 'probe-rs').
+  #|- mode: user
+  #|  script: |
+  #|    #!/bin/bash
+  #|    set -eux -o pipefail
+  #|
+  #|    cargo +stable install espflash --locked
+  #|    espflash completions bash > ~/.espflash-completion.bash
+  #|
+  #|    cat >> ~/.bashrc <<EOF1
+  #|
+  #|    # Enable command line completion for espflash.
+  #|    if [ -f ~/.espflash-completion.bash ]; then
+  #|      source ~/.espflash-completion.bash
+  #|    fi
+  #|    EOF1
 
   # Client side support for 'espflash' and 'probe-rs' remoting.
   #
@@ -230,9 +230,6 @@ provision:
     script: |
       #!/bin/bash
       set -eux -o pipefail
-
-      env > {{.Home}}/DEBUG.env
-        #TEMP
 
       #🔵 Skip if disabled
       #
@@ -281,17 +278,16 @@ provision:
         WarnWeakCrypto no-pq-kex
       EOF3
 
-  # Let host resolved e.g. 'rpi.local' for remoted probe-rs / espflash use, without needing the exact IP.
+  # Let the host resolve e.g. 'rpi.local' for remoted probe-rs / espflash use. It has access to mDNS (we don't).
   #
-  # Note: It's nice we can do this without a bridging network adapter. We config 'systemd-resolved' to pass '.local'
-  #       domains to the host (DNS), which does have mDNS and is able to resolve the IP.
+  # Note: It's nice we can do this without a bridging network adapter. :)
   #
   - mode: system
     script: |
       #!/bin/bash
       set -eux -o pipefail
 
-      #exists: mkdir -p /etc/systemd/resolved.conf.d
+      [ -d /etc/systemd/resolved.conf.d ] || { printf >&2 "No '/etc/systemd/resolved.conf.d'; create one."; false; }
       echo -e "[Resolve]\nDomains=~local" | sudo tee /etc/systemd/resolved.conf.d/probe-rs-local.conf
 
       # Isn't strictly needed: Makefile would stop the VM for mounts (but that may change)
