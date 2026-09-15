@@ -100,7 +100,7 @@ Plan which folders you'd like to map. You can also add more later by stopping th
 # Scroll to the end of the YAML and replace the file 'mounts: null' with e.g.
 mounts:
   - location: "/Users/xxx/Git/SLED"
-    mountPoint: "/home/lima/SLED"   
+    mountPoint: "/home/lima/SLED"
     writable: true
 ```
 

@@ -1,0 +1,4 @@
+/tmp/
+
+# Lima creates these when an edit fails:
+/lima.REJECTED.yaml

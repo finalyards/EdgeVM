@@ -7,7 +7,6 @@ minimumLimaVersion: 2.2.0
 
 # macOS defaults ('vz', 'virtiofs'); for other OS'es, just comment them out.
 vmType: "vz"
-# Note: 'virtiofs' is "experimental on Linux [host?]" (2.2.0)
 mountType: "virtiofs"
 
 # Instead of a template, we use a specific image. This is vital for embedded development (USB/IP client) dependencies
@@ -43,26 +42,18 @@ user:
   home: "/home/{{.User}}"
     # Lima defaults to '/home/{{.User}}.guest', we don't need the host/client disambiguation.
 
-# EDIT THESE AT THE END OF THE FILE, replacing 'mounts: none'
-#
-#mounts:
-#  - location: "/Users/xxx/Git/Some"
-#    mountPoint: "/home/lima/Some"
-#    writable: true
-#    sshfs:
-#     - cache: false
-#    9p:
-#     - cache: none
-
 param:
   # Expects a certain name for the Raspberry Pi. Override this by '--param PROBE_RS_REMOTE=...'.
   PROBE_RS_REMOTE: probe-rs@rpi.local
 
+  # Where provisioning sentinel files reside
+  STL_PATH: "{{.Home}}/.lima-provision"
+
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
-  localPort: 49925
+  localPort: 49927
   # Rust Rover Remote Development needs that the VM is approachable only using the '~/.ssh/config'.
-  #?loadDotSSHPubKeys: true
+  #loadDotSSHPubKeys: true
   #   tbd. Does this eliminate the need to edit the '~/.ssh/config'?
 
 portForwards:
@@ -87,33 +78,132 @@ portForwards:
 #   {{.Hostname}} lima-edge-vm
 #   {{.UID}}    502
 #   {{.User}}   lima
-#   {{.Param.Key}} <no value>
+#   {{.Param.Key}} "<no value>" if empty
 #
-# NOTE:
-#   'DEBIAN_FRONTEND=noninteractive' matters (for 'system' provisioning). Keep it.
+# Environment variables:
+#   PARAM_{Key}
+#
+# ⭐️READ ME!!
+#     Provisioning happens *every time* a VM is stopped, restarted. This is to allow edits of the config to reach the VM
+#     (author's guess), but for our needs a _one time_ initialization is most useful and performant.
+#
+#     The documentation does ask the scripts to be idempotent. We go further, using sentinel files to see whether they
+#     ever succeeded (and skipping if did). You can *easily* tweak this by incrementing the "version" counter part of
+#     the sentinel name (i.e. if you make an edit, increment the "version"; no need to recreate the VM!).
+#
+# NOTES:
+#   - 'DEBIAN_FRONTEND=noninteractive' matters (for 'system' provisioning). Keep it.
+#   - no need for a general 'apt update' (Ubuntu's cloud-init does it for you), but we do run it within the Sentinel-
+#     guarded step (apt deps), just to get the latest versions. You can also omit the 'apt update'.
 #
 provision:
+  # Tool for the provisioning steps to log their progress.
+  #
+  # NOTE: THIS DOES NOT WORK. The idea was to bring progress messages to the host, so they are seen while creating/
+  #     starting the VM. This seems to rub Lima VM the wrong way (i.e. not yet possible; Lima 2.2.0).
+  #
+  #     Doing so would:
+  #       - give transparency to what's happening
+  #       - help avoid wasting time (e.g. duplication of steps; spotting overly time-taking steps..)
+  #
+  #     The author decides to keep the mechanism here. Perhaps Lima itself will provide something akin (just dumping
+  #     the "name" of a provisioning step (could be an optional field?), or "system.{1..}", "user.{1..}" would already help).
+  #
+  # NOTE: Unlike for modes 'system', 'user', Lima (2.2.0) DOES NOT EXPAND TEMPLATE STRINGS within 'mode: data'.
+  #     Would be welcome if it did...
+  #
+  # ALSO WELCOME: Way to create a folder (not just a file) from 'mode: data'. Would use that for '{.Param.STL_PATH}'. #lima
+  #
+  - mode: data
+    path: /usr/local/bin/log-to-host
+    permissions: 755
+    #x-name: Tool for showing progress
+    content: |
+      #!/bin/bash
+      # Attempt to write directly to host 'limactl' output. THIS DOES NOT WORK.
+      #echo "[PROVISION] $*" > /dev/hvc0 2>/dev/null || true
+      echo "[PROVISION] $*" >&2
+      #echo "[PROVISION] $*" > {{.Param.STL_PATH}}/log  # Templates NOT EXPANDED within 'mode: data' #lima
+      echo "[PROVISION] $*" > /home/lima/.lima-provision/log
+
+  # Prepare provision directory
   - mode: system
+    #x-name: Prepare provision directory
     script: |
       #!/bin/bash
-      export DEBIAN_FRONTEND=noninteractive
-      apt update
+      set -eux -o pipefail
+  
+      STL_PATH="{{.Param.STL_PATH}}"
+      mkdir -p "$STL_PATH"
+      chown {{.User}} "$STL_PATH"
+
+      #|# Allow also 'mode: user' steps to write to '/dev/...'.
+      #|usermod -aG dialout,tty {{.User}}
+      #|
+      #|#|# udev rule, to "provide 'tty' group access to 'hvc0' device" (google.ai); not sure whether necessary..? tbd.
+      #|#|echo 'KERNEL=="hvc0", GROUP="tty", MODE="0660"' > /etc/udev/rules.d/99-hvc0-permissions.rules
+      #|#|udevadm control --reload-rules
+      #|#|udevadm trigger
+      
+      log-to-host "Provisioning receipts at: $STL_PATH"
+
+  # Prepare user space
+  - mode: user
+    #x-name: Prepare user space
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      SENTINEL="{{.Param.STL_PATH}}/bashrc_comment.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "bashrc comment (skipped)"
+        exit 0
+      fi
+      log-to-host "bashrc comment ..."
+
+      # Leave at least an empty space at the end of '.bashrc' - later steps append to that.
+      cat >> ~/.bashrc <<EOF_bashrc
+
+      # Added at VM preparation:
+      EOF_bashrc
+      
+      touch "$SENTINEL"
 
   # ESP-IDF + bindgen dependencies
   - mode: system
+    #x-name: ESP-IDF + bindgen dependencies
     script: |
       #!/bin/bash
       set -eux -o pipefail
       export DEBIAN_FRONTEND=noninteractive
+
+      # DEV note: Increment '.{1..n}', to force rerun on next 'limactl start', without needing to recreate the VM.
+      #
+      SENTINEL="{{.Param.STL_PATH}}/deps.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "apt install (skipped)"
+        exit 0
+      fi
+      log-to-host "apt install ..."
+
+      apt update
       apt install -y curl git pkg-config libssl-dev python3 python3-venv cmake build-essential clang make
 
-      touch {{.Home}}/DEBUG.system.1.done
+      touch "$SENTINEL"
 
   # Rust and Cargo (general)
   - mode: user
+    #x-name: Rust and Cargo (general)
     script: |
       #!/bin/bash
       set -eux -o pipefail
+
+      SENTINEL="{{.Param.STL_PATH}}/rust_and_cargo.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "Rust and Cargo (skipped)"
+        exit 0
+      fi
+      log-to-host "Rust and Cargo ..."
 
       #🔵 rustup (Rust, Cargo)
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
@@ -129,19 +219,36 @@ provision:
       #   NOTE: Do not use '/tmp/target' - it's mounted as a memory disk in Ubuntu template and could fill up.
       install -d ~/target
 
+      # Allow '~/.cargo/config.toml' to exist (and override it). This would happen if we're re-running the step, 
+      # after a sentinel version pump.
+      #
       CONFIG_TOML=~/.cargo/config.toml
-      [ ! -f "$CONFIG_TOML" ] || { printf >&2 "${CONFIG_TOML} already exists"; false; }
+      [ ! -f "$CONFIG_TOML" ] || { printf >&2 "WARN: ${CONFIG_TOML} already exists (will be replaced)"; }
   
-      cat >> $CONFIG_TOML <<EOF1
+      cat > $CONFIG_TOML <<EOF1
       [build]
       target-dir = "{{.Home}}/target"
       EOF1
 
+      touch "$SENTINEL"
+
   # Rust and Cargo (ESP32-C6 specific)
   - mode: user
+    #x-name: Rust and Cargo (ESP32-C6 specific)
     script: |
       #!/bin/bash
       set -eux -o pipefail
+
+      SENTINEL="{{.Param.STL_PATH}}/rust_esp32_c6.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "Rust support for ESP32-C6 (skipped)"
+        exit 0
+      fi
+      log-to-host "Rust support for ESP32-C6 ..."
+      log-to-host "ABC" # REMOVE
+
+      # tbd. is it needed?
+      #. ~/.cargo/env
 
       #🔵 ESP32-C6 target
       rustup target add riscv32imac-unknown-none-elf
@@ -149,20 +256,32 @@ provision:
       #🔵 CLI tools ('ldproxy' needed for ESP-IDF builds with 'global')
       cargo install --locked ldproxy
 
-  # USB/IP client
-  - mode: system
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      export DEBIAN_FRONTEND=noninteractive
+      touch "$SENTINEL"
 
-      apt install -y linux-tools-common linux-tools-$(uname -r)
-      
-      modprobe vhci-hcd
-      # Ensure the module loads on restarts. Ubuntu 26.04 uses this instead of '/etc/modules'.
-      echo "vhci-hcd" > /etc/modules-load.d/usbip.conf
-  
-      touch {{.Home}}/DEBUG.system.3.done
+  # USB/IP client
+  #
+  # DISABLED: Not up to prime time, yet (macOS 'usbipd-mac' = open source USB/IP server).
+  #
+  #|- mode: system
+  #|  script: |
+  #|    #!/bin/bash
+  #|    set -eux -o pipefail
+  #|    export DEBIAN_FRONTEND=noninteractive
+  #|
+  #|    SENTINEL="{{.Param.STL_PATH}}/usbip_client.1.done"
+  #|    if [ -f "$SENTINEL" ]; then
+  #|    log-to-host "USB/IP client (skipped)"
+  #|      exit 0
+  #|    fi
+  #|    log-to-host "USB/IP client ..."
+  #|
+  #|    apt install -y linux-tools-common linux-tools-$(uname -r)
+  #|
+  #|    modprobe vhci-hcd
+  #|    # Ensure the module loads on restarts. Ubuntu 26.04 uses this instead of '/etc/modules'.
+  #|    echo "vhci-hcd" > /etc/modules-load.d/usbip.conf
+  #|
+  #|    touch "$SENTINEL"
 
   # Direct 'probe-rs' (USB/IP)
   #
@@ -177,6 +296,13 @@ provision:
   #|    #!/bin/bash
   #|    set -eux -o pipefail
   #|
+  #|    SENTINEL="{{.Param.STL_PATH}}/udev_usermod.1.done"
+  #|    if [ -f "$SENTINEL" ]; then
+  #|    log-to-host "udev and usermod for USB/IP (skipped)"
+  #|      exit 0
+  #|    fi
+  #|    log-to-host "udev and usermod for USB/IP ..."
+  #|
   #|    # Set up 'udev' rules and provide user-level access to the devices. |1|
   #|    #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
   #|    curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
@@ -187,14 +313,25 @@ provision:
   #|
   #|    # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
   #|    udevadm control --reload
+  #|
+  #|    touch "$SENTINEL"
   #|#
   #|- mode: user
   #|  script: |
   #|    #!/bin/bash
   #|    set -eux -o pipefail
   #|
+  #|    SENTINEL="{{.Param.STL_PATH}}/probe_rs_usbip.1.done"
+  #|    if [ -f "$SENTINEL" ]; then
+  #|      log-to-host "probe-rs over USB/IP (skipped)"
+  #|      exit 0
+  #|    fi
+  #|    log-to-host "probe-rs over USB/IP ..."
+  #|
   #|    # faster than building from source
   #|    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+  #|
+  #|    touch "$SENTINEL"
 
   # Direct 'espflash' (USB/IP)
   #
@@ -203,6 +340,13 @@ provision:
   #|  script: |
   #|    #!/bin/bash
   #|    set -eux -o pipefail
+  #|
+  #|    SENTINEL="{{.Param.STL_PATH}}/espflash_usbip.1.done"
+  #|    if [ -f "$SENTINEL" ]; then
+  #|    log-to-host "espflash over USB/IP (skipped)"
+  #|      exit 0
+  #|    fi
+  #|    log-to-host "espflash over USB/IP ..."
   #|
   #|    cargo +stable install espflash --locked
   #|    espflash completions bash > ~/.espflash-completion.bash
@@ -214,84 +358,121 @@ provision:
   #|      source ~/.espflash-completion.bash
   #|    fi
   #|    EOF1
+  #|
+  #|    touch "$SENTINEL"
 
   # Client side support for 'espflash' and 'probe-rs' remoting.
   #
-  # TO USE THIS,
-  #   - edit the 'param.PROBE_RS_REMOTE' entry above, to point to your device.
-  #   - if you already created an 'edge-vm' VM, stop, delete and recreate it.
-  #
-  #     NOTE: Why recreate? We use the default 'user+setup' mode (not 'user+boot'), meaning this script will only get
-  #         run _once_. This helps keep it simpler (no idempotency required), and once you can set custom env.vars,
-  #         (in a separate file), this should not be a concern. You can _already_ set the env var from the 'limactl start'
-  #         command used for creating the VM (a bit of hack, but...).
+  # To use this, edit the 'param.PROBE_RS_REMOTE' entry above, to point to your device.
   #
   - mode: user
+    #x-name: 'espflash' and 'probe-rs' remoting (clients)
     script: |
       #!/bin/bash
       set -eux -o pipefail
-
-      #🔵 Skip if disabled
+      
+      # Skip if not configured
       #
       # Note:
-      #   - {{.Param.xxx}} gives "<no value>" when empty.
-      #   - ${PARAM_xxx} gives ...tbd.
+      #   - {{.Param.xxx}} gives "<no value>" when not defined.
+      #   - ${PARAM_xxx} gives "" when not defined, so test that first. If exists, can use '{{.Param.xxx}}'.
       #
       [ -z ${PARAM_PROBE_RS_REMOTE} ] && { \
-        touch {{.Home}}/DEBUG.remoting.disabled
+        log-to-host "espflash and probe-rs remoting: not configured"; \
         printf >&2 "probe-rs/espflash remoting disabled"; exit 0; \
       }
-      touch {{.Home}}/DEBUG.remoting.enabled
 
+      SENTINEL="{{.Param.STL_PATH}}/remoting.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "espflash and probe-rs remoting to: '{{.Param.PROBE_RS_REMOTE}}' (skipped)"
+        exit 0
+      fi
+      log-to-host "espflash and probe-rs remoting to: '{{.Param.PROBE_RS_REMOTE}}' ..."
+
+      touch {{.Home}}/DEBUG.1
       #🔵 Set in '.bashrc'
       cat >> ~/.bashrc <<EOF1
-
       export PROBE_RS_REMOTE={{.Param.PROBE_RS_REMOTE}}
       EOF1
+      touch {{.Home}}/DEBUG.2
       
       #🔵 Set up '~/bin' if not already there
       [ -d ~/bin ] || { \
         install -d ~/bin; \
         echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc; \
       }
+      touch {{.Home}}/DEBUG.3
 
-      #🔵 Prepare for remoting; -> https://github.com/finalyards-org/probe-rs-remote
-      #
       curl -fsSL -o ~/bin/probe-rs-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/probe-rs-remote.sh
       chmod a+x ~/bin/probe-rs-remote.sh
 
       curl -fsSL -o ~/bin/espflash-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/espflash-remote.sh
       chmod a+x ~/bin/espflash-remote.sh
 
-      # Create an ssh key for later (manual) pairing.
+      (cd ~/bin && ln -sf probe-rs-remote.sh probe-rs)
+      (cd ~/bin && ln -sf espflash-remote.sh espflash)
+      
+      # !! Disabled, since this isn't strictly necessary and the EARLIER VERSION WITHOUT NAMING 'id_rsa' MAY HAVE
+      #       WORKED BETTER! tbd.
       #
-      # After this, one can avoid being asked pw's, by:
-      #   <<
-      #     ssh-copy-id $PROBE_RS_REMOTE
-      #   <<
-      ssh-keygen < /dev/zero > /dev/null \
-        -t rsa -C "for 'espflash' remote" -q -N ""
+      #|# Create an ssh key for later (manual) pairing.
+      #|#
+      #|# After this, one can avoid being asked pw's, by:
+      #|#   <<
+      #|#     ssh-copy-id $PROBE_RS_REMOTE
+      #|#   <<
+      #|if [ ! -f ~/.ssh/id_rsa ]; then
+      #|  ssh-keygen -t rsa -C "for espflash remoting" -q -N "" -f ~/.ssh/id_rsa
+      #|fi
 
-      cat >> ~/.ssh/config <<EOF3
+      (grep -q "WarnWeakCrypto no-pq-kex" ~/.ssh/config 2>/dev/null) || \
+        cat >> ~/.ssh/config <<EOF3
       # Block quantum warning on using 'espflash' remotely
       Match host ${PARAM_PROBE_RS_REMOTE#*@}
         WarnWeakCrypto no-pq-kex
       EOF3
 
-  # Let the host resolve e.g. 'rpi.local' for remoted probe-rs / espflash use. It has access to mDNS (we don't).
+      touch "$SENTINEL"
+
+  # Let the host resolve 'rpi.local' for remoted probe-rs / espflash use. It does have access to mDNS; we don't.
   #
-  # Note: It's nice we can do this without a bridging network adapter. :)
+  # Note: Lighter than doing this by using a bridging network adapter (the author's opinion).
+  #
+  # TESTING:
+  #   After this, 'resolvectl status' (within VM) should show
+  #     - 'Link 2 (eth0)': 'DNS Domain: ~local'
   #
   - mode: system
+    #x-name: DNS resolution for '.local' domain
     script: |
       #!/bin/bash
       set -eux -o pipefail
 
-      [ -d /etc/systemd/resolved.conf.d ] || { printf >&2 "No '/etc/systemd/resolved.conf.d'; create one."; false; }
-      echo -e "[Resolve]\nDomains=~local" | sudo tee /etc/systemd/resolved.conf.d/probe-rs-local.conf
+      SENTINEL="{{.Param.STL_PATH}}/local_domains.1.done"
+      if [ -f "$SENTINEL" ]; then
+        log-to-host "Enabling '.local' domains (skipped)"
+        exit 0
+      fi
+      log-to-host "Enabling '.local' domains ..."
 
-      # Isn't strictly needed: Makefile would stop the VM for mounts (but that may change)
-      systemctl restart systemd-resolved
+      [ -d /etc/netplan ] || { printf >&2 "No '/etc/netplan'; weird"; false; }
+
+      FN=/etc/netplan/99-mdns-routing.yaml
+
+      cat << EOF4 | tee $FN
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            dhcp4: true
+            nameservers:
+              search: [ "~local" ]
+      EOF4
+
+      chmod 600 $FN
+      netplan apply
+      
+      touch "$SENTINEL"
 
   # DEBUG. Finish up.
   # Note: Lima VM first runs all 'mode: system' scripts, then all 'mode: user'. Sequentially, in order.
@@ -305,3 +486,14 @@ provision:
     script: |
       #!/bin/bash
       touch ~/DEBUG.user.all.done
+
+# EDIT THESE AT THE END OF THE FILE, replacing 'mounts: none'
+#
+mounts:
+  - location: "/Users/asko/Git/SLED"
+    mountPoint: "/home/lima/SLED"
+    writable: true
+  - location: "/Users/asko/Git/ezb-node"
+    mountPoint: "/home/lima/ezb-node"
+    writable: true
+

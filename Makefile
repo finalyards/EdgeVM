@@ -4,8 +4,7 @@
 #	- limactl
 #
 # Usage:
-#	$ make {edge|mini|...} [PROGRESS=1]
-#	$ make vm VM_NAME={...}-vm
+#	$ [PROGRESS=1] make {edge|mini|...}
 #
 VM_NAME :=
 _VM_USER := lima
