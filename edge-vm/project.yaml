@@ -47,11 +47,19 @@ param:
   PROBE_RS_REMOTE: probe-rs@rpi.local
 
   # Where provisioning sentinel files reside
-  STL_PATH: "{{.Home}}/.lima-provision"
+  #
+  # Requirements for the path:
+  #   - survives restarts ('/tmp/' does not)
+  #   - also the 'lima' user can write to (if we add it to the 'wheel' group, it could write to '/var/...').
+  #
+  # NOTE: Expanding Lima (2.3.0-beta.0) parameters does not seem to be recursive: '{{.Home}}' cannot be used.
+  #
+  #STL_PATH: "{{.Home}}/.lima-provision"
+  STL_PATH: "/home/lima/.lima-provision"
 
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
-  localPort: 49927
+  localPort: 49925
   # Rust Rover Remote Development needs that the VM is approachable only using the '~/.ssh/config'.
   #loadDotSSHPubKeys: true
   #   tbd. Does this eliminate the need to edit the '~/.ssh/config'?
@@ -93,8 +101,7 @@ portForwards:
 #
 # NOTES:
 #   - 'DEBIAN_FRONTEND=noninteractive' matters (for 'system' provisioning). Keep it.
-#   - no need for a general 'apt update' (Ubuntu's cloud-init does it for you), but we do run it within the Sentinel-
-#     guarded step (apt deps), just to get the latest versions. You can also omit the 'apt update'.
+#   - 'apt-get update' is not needed, unless we change the sources (cloudinit has run it for a new instance).
 #
 provision:
   # Tool for the provisioning steps to log their progress.
@@ -124,7 +131,6 @@ provision:
       #echo "[PROVISION] $*" > /dev/hvc0 2>/dev/null || true
       echo "[PROVISION] $*" >&2
       #echo "[PROVISION] $*" > {{.Param.STL_PATH}}/log  # Templates NOT EXPANDED within 'mode: data' #lima
-      echo "[PROVISION] $*" > /home/lima/.lima-provision/log
 
   # Prepare provision directory
   - mode: system
@@ -132,22 +138,25 @@ provision:
     script: |
       #!/bin/bash
       set -eux -o pipefail
-  
+      
       STL_PATH="{{.Param.STL_PATH}}"
       mkdir -p "$STL_PATH"
       chown {{.User}} "$STL_PATH"
-
+      
       #|# Allow also 'mode: user' steps to write to '/dev/...'.
       #|usermod -aG dialout,tty {{.User}}
       #|
-      #|#|# udev rule, to "provide 'tty' group access to 'hvc0' device" (google.ai); not sure whether necessary..? tbd.
-      #|#|echo 'KERNEL=="hvc0", GROUP="tty", MODE="0660"' > /etc/udev/rules.d/99-hvc0-permissions.rules
-      #|#|udevadm control --reload-rules
-      #|#|udevadm trigger
+      #|# udev rule, to "provide 'tty' group access to 'hvc0' device" (google.ai); not sure whether necessary..? tbd.
+      #|echo 'KERNEL=="hvc0", GROUP="tty", MODE="0660"' > /etc/udev/rules.d/99-hvc0-permissions.rules
+      #|udevadm control --reload-rules
+      #|udevadm trigger
       
       log-to-host "Provisioning receipts at: $STL_PATH"
+      touch {{.Home}}/DONE.1
 
   # Prepare user space
+  #   - make sure colored command line prompt is there, by copying templates from '/etc/skel/.bashrc'
+  #
   - mode: user
     #x-name: Prepare user space
     script: |
@@ -161,11 +170,14 @@ provision:
       fi
       log-to-host "bashrc comment ..."
 
-      # Leave at least an empty space at the end of '.bashrc' - later steps append to that.
-      cat >> ~/.bashrc <<EOF_bashrc
+      cp /etc/skel/.bashrc ~/
+      cp /etc/skel/.profile ~/
+        
+      # Leave a comment at the end of '.bashrc' - later steps append to that.
+      cat >> ~/.bashrc <<EOF
 
       # Added at VM preparation:
-      EOF_bashrc
+      EOF
       
       touch "$SENTINEL"
 
@@ -186,8 +198,8 @@ provision:
       fi
       log-to-host "apt install ..."
 
-      apt update
-      apt install -y curl git pkg-config libssl-dev python3 python3-venv cmake build-essential clang make
+      # 'apt-get update' can be omitted
+      apt-get install -y curl git pkg-config libssl-dev python3 python3-venv cmake build-essential clang make
 
       touch "$SENTINEL"
 
@@ -245,10 +257,6 @@ provision:
         exit 0
       fi
       log-to-host "Rust support for ESP32-C6 ..."
-      log-to-host "ABC" # REMOVE
-
-      # tbd. is it needed?
-      #. ~/.cargo/env
 
       #🔵 ESP32-C6 target
       rustup target add riscv32imac-unknown-none-elf
@@ -257,109 +265,6 @@ provision:
       cargo install --locked ldproxy
 
       touch "$SENTINEL"
-
-  # USB/IP client
-  #
-  # DISABLED: Not up to prime time, yet (macOS 'usbipd-mac' = open source USB/IP server).
-  #
-  #|- mode: system
-  #|  script: |
-  #|    #!/bin/bash
-  #|    set -eux -o pipefail
-  #|    export DEBIAN_FRONTEND=noninteractive
-  #|
-  #|    SENTINEL="{{.Param.STL_PATH}}/usbip_client.1.done"
-  #|    if [ -f "$SENTINEL" ]; then
-  #|    log-to-host "USB/IP client (skipped)"
-  #|      exit 0
-  #|    fi
-  #|    log-to-host "USB/IP client ..."
-  #|
-  #|    apt install -y linux-tools-common linux-tools-$(uname -r)
-  #|
-  #|    modprobe vhci-hcd
-  #|    # Ensure the module loads on restarts. Ubuntu 26.04 uses this instead of '/etc/modules'.
-  #|    echo "vhci-hcd" > /etc/modules-load.d/usbip.conf
-  #|
-  #|    touch "$SENTINEL"
-
-  # Direct 'probe-rs' (USB/IP)
-  #
-  # tbd. Make this step optional, so that from the *command line* (or from 'custom.params') can steer its inclusion.
-  #
-  # Note: Remoting to a macOS USB/IP host (open source) is still in its infancy, and *might not emerge* (Apple policies
-  #       favor commercial application bundles in this). If there's indication that a local (same machine) macOS
-  #       USB/IP connection would be usable (with high enough baud rates), re-enable this.
-  #
-  #|- mode: system
-  #|  script: |
-  #|    #!/bin/bash
-  #|    set -eux -o pipefail
-  #|
-  #|    SENTINEL="{{.Param.STL_PATH}}/udev_usermod.1.done"
-  #|    if [ -f "$SENTINEL" ]; then
-  #|    log-to-host "udev and usermod for USB/IP (skipped)"
-  #|      exit 0
-  #|    fi
-  #|    log-to-host "udev and usermod for USB/IP ..."
-  #|
-  #|    # Set up 'udev' rules and provide user-level access to the devices. |1|
-  #|    #   |1| -> https://probe.rs/docs/getting-started/probe-setup/
-  #|    curl https://probe.rs/files/69-probe-rs.rules -O --output-dir /etc/udev/rules.d/
-  #|
-  #|    # Though we'd only use 'plugdev' in the udev rules (above), '/dev/ttyUSB0' may be in the 'dialout' group. Allow both.
-  #|    usermod -a -G plugdev {{.User}}
-  #|    usermod -a -G dialout {{.User}}
-  #|
-  #|    # ensure the rules are used; note 'trigger' is not needed since no devices are attached, at this point.
-  #|    udevadm control --reload
-  #|
-  #|    touch "$SENTINEL"
-  #|#
-  #|- mode: user
-  #|  script: |
-  #|    #!/bin/bash
-  #|    set -eux -o pipefail
-  #|
-  #|    SENTINEL="{{.Param.STL_PATH}}/probe_rs_usbip.1.done"
-  #|    if [ -f "$SENTINEL" ]; then
-  #|      log-to-host "probe-rs over USB/IP (skipped)"
-  #|      exit 0
-  #|    fi
-  #|    log-to-host "probe-rs over USB/IP ..."
-  #|
-  #|    # faster than building from source
-  #|    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
-  #|
-  #|    touch "$SENTINEL"
-
-  # Direct 'espflash' (USB/IP)
-  #
-  # See comments above (on USB/IP 'probe-rs').
-  #|- mode: user
-  #|  script: |
-  #|    #!/bin/bash
-  #|    set -eux -o pipefail
-  #|
-  #|    SENTINEL="{{.Param.STL_PATH}}/espflash_usbip.1.done"
-  #|    if [ -f "$SENTINEL" ]; then
-  #|    log-to-host "espflash over USB/IP (skipped)"
-  #|      exit 0
-  #|    fi
-  #|    log-to-host "espflash over USB/IP ..."
-  #|
-  #|    cargo +stable install espflash --locked
-  #|    espflash completions bash > ~/.espflash-completion.bash
-  #|
-  #|    cat >> ~/.bashrc <<EOF1
-  #|
-  #|    # Enable command line completion for espflash.
-  #|    if [ -f ~/.espflash-completion.bash ]; then
-  #|      source ~/.espflash-completion.bash
-  #|    fi
-  #|    EOF1
-  #|
-  #|    touch "$SENTINEL"
 
   # Client side support for 'espflash' and 'probe-rs' remoting.
   #
@@ -389,19 +294,16 @@ provision:
       fi
       log-to-host "espflash and probe-rs remoting to: '{{.Param.PROBE_RS_REMOTE}}' ..."
 
-      touch {{.Home}}/DEBUG.1
       #🔵 Set in '.bashrc'
       cat >> ~/.bashrc <<EOF1
       export PROBE_RS_REMOTE={{.Param.PROBE_RS_REMOTE}}
       EOF1
-      touch {{.Home}}/DEBUG.2
       
       #🔵 Set up '~/bin' if not already there
       [ -d ~/bin ] || { \
         install -d ~/bin; \
         echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc; \
       }
-      touch {{.Home}}/DEBUG.3
 
       curl -fsSL -o ~/bin/probe-rs-remote.sh https://raw.githubusercontent.com/finalyards-org/probe-rs-remote/refs/heads/main/sh/probe-rs-remote.sh
       chmod a+x ~/bin/probe-rs-remote.sh
@@ -459,18 +361,23 @@ provision:
 
       FN=/etc/netplan/99-mdns-routing.yaml
 
-      cat << EOF4 | tee $FN
+      cat << 'EOF4' | tee $FN
       network:
         version: 2
         ethernets:
           eth0:
             dhcp4: true
+            dhcp4-overrides:
+              use-dns: true
             nameservers:
-              search: [ "~local" ]
+              search: [ "local" ]
       EOF4
 
       chmod 600 $FN
       netplan apply
+
+      # Check that normal DNS still works
+      #ping -c 1 rustup.sh
       
       touch "$SENTINEL"
 
@@ -486,14 +393,3 @@ provision:
     script: |
       #!/bin/bash
       touch ~/DEBUG.user.all.done
-
-# EDIT THESE AT THE END OF THE FILE, replacing 'mounts: none'
-#
-mounts:
-  - location: "/Users/asko/Git/SLED"
-    mountPoint: "/home/lima/SLED"
-    writable: true
-  - location: "/Users/asko/Git/ezb-node"
-    mountPoint: "/home/lima/ezb-node"
-    writable: true
-

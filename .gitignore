@@ -1,3 +1,5 @@
+custom.mounts.list
+
 /tmp/
 
 # Lima creates these when an edit fails:

@@ -31,12 +31,8 @@ user:
   home: "/home/{{.User}}"
     # Lima defaults to '/home/{{.User}}.guest', we don't need the host/client disambiguation.
 
-# EDIT THESE AT THE END OF THE FILE, replacing 'mounts: none'
-#
-#mounts:
-#  - location: "/Users/xxx/Git/Some"
-#    mountPoint: "/home/lima/Some"
-#    writable: true
+# Mounts steered by 'edge-vm/custom.mounts.list'
+#mounts: null
 
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.

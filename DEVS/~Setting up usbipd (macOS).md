@@ -1,3 +1,9 @@
+
+---
+*Currently USB/IP is not usable, with a macOS (open source) host.*
+
+---
+
 # Setting up usbipd (macOS)
 
 USB/IP provides a way to turn USB traffic over to IP - and back. This is needed for passing-through a devkit from your host to a Lima VM.
