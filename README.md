@@ -213,6 +213,10 @@ This brings the creation log host-side, and you can excavate it in IDE. 😀
 
 Have a look at the individual `README`s for the subfolders you will be using. They give more details about working with a certain development setup.
 
+### Remote Development
+
+[`extra/Remote Development`](extra/Remote Development.md) has information on how to set up Rust Rover IDE to do remote development with your projects.
+
 
 <!--
 ## References

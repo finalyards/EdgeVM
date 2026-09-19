@@ -313,18 +313,19 @@ provision:
       (cd ~/bin && ln -sf probe-rs-remote.sh probe-rs)
       (cd ~/bin && ln -sf espflash-remote.sh espflash)
       
-      # !! Disabled, since this isn't strictly necessary and the EARLIER VERSION WITHOUT NAMING 'id_rsa' MAY HAVE
-      #       WORKED BETTER! tbd.
+      # Make sure an ssh key exists for later (manual) pairing.
       #
-      #|# Create an ssh key for later (manual) pairing.
-      #|#
-      #|# After this, one can avoid being asked pw's, by:
-      #|#   <<
-      #|#     ssh-copy-id $PROBE_RS_REMOTE
-      #|#   <<
-      #|if [ ! -f ~/.ssh/id_rsa ]; then
-      #|  ssh-keygen -t rsa -C "for espflash remoting" -q -N "" -f ~/.ssh/id_rsa
-      #|fi
+      # With this, you can avoid being asked pw's when flashing:
+      #   <<
+      #     ssh-copy-id $PROBE_RS_REMOTE
+      #   <<
+      #
+      _SSH_PRIVATE=~/.ssh/id_ed25519
+      if [ ! -f ${_SSH_PRIVATE} ]; then
+        ssh-keygen -t ed25519 -C "for espflash remoting" -q -N "" -f ${_SSH_PRIVATE}
+      else
+        log-to-host "'${_SSH_PRIVATE}' already existed"   # that's fine, we don't need to override it
+      fi
 
       (grep -q "WarnWeakCrypto no-pq-kex" ~/.ssh/config 2>/dev/null) || \
         cat >> ~/.ssh/config <<EOF3
