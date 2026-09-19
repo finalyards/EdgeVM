@@ -73,14 +73,17 @@ vm: $(_TMP_YAML) | limactl ssh_exists no_prior_vm
 	limactl start --name=$(VM_NAME) -y $(_LIMACTL_FLAGS) -- $(_TMP_YAML)
 
 	@# Pass only with a spotless provisioning!
-	@limactl shell $(VM_NAME) cloud-init status --wait > /dev/null || \
+	@limactl shell $(VM_NAME) cloud-init status --wait | grep -q "status: done" || \
 	  { \
-	    echo -e "\nJust a clip:\n---"; \
-	    limactl shell edge-vm sudo cat /var/log/cloud-init-output.log | grep -E "WARNING|ERROR"; \
+	    echo -e "\nCloud-init status:\n---"; \
+	    limactl shell $(VM_NAME) cloud-init status --long; \
 	    echo "---"; \
 	    printf >&2 "\n❗ ERROR: Some provisioning step(s) failed! Check logs with: limactl shell $(VM_NAME) sudo cat /var/log/cloud-init-output.log\n"; \
 	    false; \
 	}
+	    @#echo -e "\nJust a clip:\n---"; \
+	    @#limactl shell $(VM_NAME) sudo cat /var/log/cloud-init-output.log | grep -E "WARNING|ERROR"; \
+	    @#echo "---"; \
 
 	@test -f $(_VM_SSH_CONFIG) || \
 	  	{ printf >&2 "❗ERROR: '$(_VM_SSH_CONFIG)' was not produced.\n"; false; }

@@ -152,7 +152,6 @@ provision:
       #|udevadm trigger
       
       log-to-host "Provisioning receipts at: $STL_PATH"
-      touch {{.Home}}/DONE.1
 
   # Prepare user space
   #   - make sure colored command line prompt is there, by copying templates from '/etc/skel/.bashrc'
@@ -381,15 +380,4 @@ provision:
       
       touch "$SENTINEL"
 
-  # DEBUG. Finish up.
-  # Note: Lima VM first runs all 'mode: system' scripts, then all 'mode: user'. Sequentially, in order.
-  #
-  - mode: system
-    script: |
-      #!/bin/bash
-      touch {{.Home}}/DEBUG.system.all.done
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      touch ~/DEBUG.user.all.done
+#end
