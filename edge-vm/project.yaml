@@ -60,9 +60,8 @@ param:
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
   localPort: 49925
-  # Rust Rover Remote Development needs that the VM is approachable only using the '~/.ssh/config'.
-  #loadDotSSHPubKeys: true
-  #   tbd. Does this eliminate the need to edit the '~/.ssh/config'?
+  # Default: only the host can access the VM.
+  loadDotSSHPubKeys: false
 
 portForwards:
   # Silence (some) warnings, when creating the VM

@@ -1,50 +1,32 @@
-# Troubleshooting and Lima Feedback
+# Troubleshooting
 
-## Errors entering the VM
+## Errors when launching the VM shell
 
 ```
-% limactl shell edge-vm  
-bash: line 1: cd: /Users/asko/Git/SLED: No such file or directory
+% limactl shell edge-vm 
+bash: line 1: cd: /Users/asko/Git/ezb-node: No such file or directory
 bash: line 1: cd: /Users/asko: No such file or directory
 ```
 
-Reason:
+This is harmless. It's caused by Lima VM (2.3.0-beta.0) attempting to `cd` to your *host side* path when a folder has been mounted to the VM with another path.
 
-- `limactl` (2.2.0) by default tries to enter the *same* path as your host current working directory.
-- Due to our sandboxing, it does not exist.
+**Example.**
 
-Work-around:
+1. Mount a folder `/Users/jack/Abc` as `/lima/home/Abc` (EdgeVM mounts all folders in the VM home directory)
 
-```
-% limactl shell --workdir /home/lima edge-vm
-```
+2. exit the VM
 
-**Upstream feedback?**
-
-Suggest that if the folder does not exist, instead of printing the above errors, quietly move to the default VM home.
-
-This would retain the existing functionality, but also feel natural when people have made stricter sandboxes 
-of their VMs.
-
-
-## Lima: Debugging
-
-Lima could ease debugging of provisioning scripts by:
-
-1. Stopping *ANY* later scripts from being executed if one fails
-
-	Currently, they log:
+3. Be *inside the said, mounted folder* on the host. There:
 
 	```
-	INFO[0203] [cloud-init] LIMA 2026-09-18T11:30:25+01:00| WARNING: Failed to execute /mnt/lima-cidata/provision.user/00000004 (as user lima) 
+	% limactl shell edge-vm
 	```
-	
-	...and continue to the next step.
 
-	>Note that within the logging level, that's an `INFO`. Thus, changing logging level to `WARN` hides it.
+**Work-around**
 
-2. Logging provisioning errors (see above) as `WARN` or `ERROR` log levels.
+```
+% limactl shell --workdir /home/lima/Abc edge-vm
+lima@lima-edge-vm:~/Abc$
+```
 
-The YAML and the Makefile currently carry complexity because of this. A good approach could be to try to trim them down, showing where Lima workarounds have been employed.
 
-This is a "long shot" but doing so would make Lima more expectable. Less surprises is good in software making!
