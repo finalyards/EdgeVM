@@ -38,7 +38,7 @@
 	- "gear" icon next to the `Connection: <New Connection>`
 	- `+`
 	
-	<!-- REALLY need screenshot here! -->
+	![](.images/rr-remote-dialog.png)
 	
 	- Fill in: 
 		- `Host:` `lima-edge-vm`

@@ -1,30 +1,34 @@
 ## Using remoting
 
+<!-- #hidden
 We discuss the use of [`probe-rs-remote`](https://github.com/finalyards-org/probe-rs-remote/blob/main/README.md) to proxy either (or both) `probe-rs` and/or `espflash` to another computer, connected to the devkit(s).
+-->
 
----
+Since you are developing within a VM, you cannot simply plug in a target device (Lima VM does not provide USB pass-throughs; it's [difficult on macOS](https://github.com/lima-vm/lima/issues/4766)).
 
-Since you are developing within a VM, you cannot simply plug in a target device (Lima VM does not provide USB pass-throughs).
+There are (at least) three solutions to this.
 
-There are three solutions to this.
-
-1. `probe-rs` has [built-in remoting](https://bugadani.github.io/rust/probe-rs/2025/02/20/probe-rs-server.html) (blog, Feb'25)
-
-2. USB/IP carries USB protocol over the IP
+1. USB/IP carries USB protocol over the IP
 
 	Works but can be slow. IP protocol is not well adjusted to a lot of small, back and forth messages.
+	
+	macOS has no reliable open source USB/IP host, though [`usbipd-mac`](https://github.com/beriberikix/usbipd-mac) is being made... <sub>Version 0.6.0 doesn't cut our use case; tried it.</sub>
+
+2. `probe-rs` has [built-in remoting](https://bugadani.github.io/rust/probe-rs/2025/02/20/probe-rs-server.html) (blog, Feb'25)
+
+	The author sees this mostly as feature creep (it should be kept separate from the main flashing tool) and it would not solve the issue for `espflash`, anyhow.
 
 3. [probe-rs-remote](https://github.com/finalyards-org/probe-rs-remote)
 
-	Proxies either `probe-rs` and/or `espflash` commands via a proxy script within the VM, over ssh, to the physical device running the real things.
+	Proxies either `probe-rs` and/or `espflash` commands via a proxy script within the VM, over `ssh`, to the physical device running the real things.
+	
+	>Note: The feature set is not 100%, but is enough for normal `cargo` use.
 
 ### Steps to use `probe-rs-remote`
 
-Your remote device has an IP, e.g. `192.168.1.97`. Edit this in the `.bashrc` and `~/.ssh/config` files, within the VM image.
+Your remote device has an IP, e.g. `192.168.1.97`. Edit this in the `.bashrc` and `~/.ssh/config` files, within the VM image. 
 
-<!-- #whisper
-The baking in of `PROBE_RS_REMOTE` in the VM creation is intended to help eliminate needing to edit files within the VM. #later
--->
+>You can also use its `.local` domain, e.g. `rpi.local`.
 
 Then:
 
@@ -52,17 +56,10 @@ SPI Boot Crypt Count (SPI_BOOT_CRYPT_CNT): 0x0
 
 ```
 
-
-## Hints
-
 ### Passwordless `ssh`
 
 ```
-$ ssh-copy-id probe-rs@192.168.1.97
+$ ssh-copy-id probe-rs@rpi.local
 ```
 
-<!-- tbd. Make *also that* part of the VM creation?? somehow.
--->
-
-This exchanges keys with the remote device so that plain `ssh` just works. Recommended!
-
+This asks for your remote password and exchanges keys so that in the future, `ssh` just works between the devices.

@@ -1,22 +1,14 @@
 # Track
 
-## USB pass-through attempt for Lima VM
+## Lima: USB pass-through attempt
 
 - ["QEMU: implement USB passthrough"](https://github.com/lima-vm/lima/issues/4766)
 
 	Also covers `vz` though only QEMU is in the title.
 
 
-<!--r (mentioned in the Issue)
+## Lima: unnecessary errors
 
-## 2min wait when creating a VM
+- ["Unnecessary `No such file or directory` when launching Lima shell"](https://github.com/lima-vm/lima/issues/5520)
 
-Discussed [here](https://github.com/lima-vm/lima/issues/4792) (closed, Jun'26).
-
-Still open on `cloudinit` (Canonical):
-
-- ["filter link-local IPv4 addresses in rename downable check"](https://github.com/canonical/cloud-init/pull/7085) (GitHub PR; `OPEN` 17-Sep-26)
-
-- Background: ["Rename of interfaces broken at boot time (netplan-configure.service vs cloud-init-network.service)"](https://bugs.launchpad.net/ubuntu/+source/cloud-init/+bug/2136392) (Canonical discussion forum; Dec'25 .. Sep'26)
-
--->
+	This is also covered in `TROUBLES.md`; if resolved by Lima, remove from there.
