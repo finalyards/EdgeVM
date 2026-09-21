@@ -22,28 +22,20 @@ endif
 
 _MAKEFILE := $(lastword $(MAKEFILE_LIST))
 
+_VM_SSH_CONFIG := ~/.lima/$(VM_NAME)/ssh.config
+
 #---
 # Remote Development.
 #
-# In order to set up Remote Development, IntelliJ IDE needs the VM to be reachable using _the default* '.ssh/config'
-# of the system (e.g. 'ssh lima-edge-vm').
+# In order to set up Remote Development, IntelliJ IDE needs the VM to be reachable using the default '~/.ssh/config',
+# i.e. it does not support '-F {config file}' parameter (Sep'26).
 #
-# Lima plays fair and does not edit the said file. Within the Makefile, we append references to created VM's so that
-# this can be done.
+# If you wish to append VM information automatically to '~/.ssh/config' (so Remote Development works), keep this as 1.
 #
-# ~/.lima/edge-vm/ssh.config:
-# <<
-#	Host lima-edge-vm
-#	  IdentityFile "/Users/xxx/.lima/_config/user"
-#	  ...
-#	  Port 49925
-# <<
-#
-_VM_SSH_CONFIG := ~/.lima/$(VM_NAME)/ssh.config
-#_VM_SSH_CONFIG :=		# disabled; no changes to your '~/.ssh/config'; Remote Development currently not possible
+_REMOTE_READY:=1
 
 # Makefile note: defining multi-line blocks with 'define' + 'export'.
-ifneq ($(strip $(_VM_SSH_CONFIG)),)
+ifeq ($(_REMOTE_READY),1)
 define SSH_CONFIG_BLOCK
 Match all
 Include $(_VM_SSH_CONFIG)
@@ -97,12 +89,14 @@ vm: $(_TMP_YAML) | limactl ssh_exists no_prior_vm
 	@test -f $(_VM_SSH_CONFIG) || \
 	  	{ printf >&2 "❗ERROR: '$(_VM_SSH_CONFIG)' was not produced.\n"; false; }
 
-ifneq ($(strip $(_VM_SSH_CONFIG)),)
+ifeq ($(_REMOTE_READY),1)
 	@$(MAKE) edit_ssh_config
 endif
 
 	@# Dive right in!
-	@limactl shell $(VM_NAME)
+	@# Note: Prefer 'ssh -F' over 'limactl shell' - this being a policy of Lima VM.
+	@ssh -F $(_VM_SSH_CONFIG) lima-$(VM_NAME)
+	@#r @limactl shell $(VM_NAME)
 
 # Mod a copy:
 #	- remove 'mounts: null' (if any)
@@ -130,7 +124,7 @@ ssh_exists:
 	@[ -d ~/.ssh ] || \
 	  { printf >&2 "❗ ERROR: Expected '~/.ssh' to exist.\n"; false; }
 
-ifneq ($(strip $(_VM_SSH_CONFIG)),)
+ifeq ($(_REMOTE_READY),1)
 edit_ssh_config:
 	@# Append '~/.ssh/config' so one can directly 'ssh' to the VM. Important for IntelliJ Remote Development.
 	@grep -q "Include ~/.lima/$(VM_NAME)/ssh.config" ~/.ssh/config || ( \

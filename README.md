@@ -64,7 +64,7 @@ The author develops this on macOS `aarm64`. Using on Linux and/or Windows host i
 
 <!-- Developed on:
 - macOS 27
-- Lima VM 2.3.0.beta.0
+- Lima VM 2.3.0-beta.0
 -->
 
 
@@ -106,17 +106,20 @@ $ exit
 
 Add here a couple of paths you'd like to reach, from the Linux VM.
 
->Note: The custom mounts only steer the *creation* of the VM. We can now either recreate it:
->
->```
->% limactl delete -f edge-vm
->% make echo
->...
->```
->
->..or you can *stop* a running VM and *edit* its settings, including mounts. Let's practice that.
+The mounts will be applied *next time you run `make edge`*.
 
-### Editing the VM config
+### A. Recreating the VM
+
+```
+% limactl delete -f edge-vm
+% make edge
+...
+$ ls	# you can now see your mounted folders
+```
+
+### B. Editing the VM config
+
+You need to stop the VM before editing its configuration:
 
 ```
 % limactl stop edge-vm
@@ -128,12 +131,12 @@ Add here a couple of paths you'd like to reach, from the Linux VM.
 
 Study the YAML. It's what declares the VM you are using.
 
-At the end, there's a `mounts` section. Or if not, create one:
+At the end, there's a `mounts` section. If not, create one:
 
 ```
 mounts:
-  - location: "~/Git/SLED"
-    mountPoint: "{{.Home}}/SLED"
+  - location: "~/Git/ABC"
+    mountPoint: "{{.Home}}/ABC"
     writable: true
 ```
 
@@ -145,16 +148,8 @@ Save; restart:
 
 ```
 % limactl start edge-vm
-% limactl shell edge-vm
+% limactl shell --workdir /home/lima/ABC edge-vm
 ```
-
-```
-$ ls
-[...] SLED
-```
-
-
-
 
 
 ### Exiting the VM
