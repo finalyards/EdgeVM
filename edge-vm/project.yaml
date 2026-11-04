@@ -335,12 +335,12 @@ provision:
 
       touch "$SENTINEL"
 
-  # Let the host resolve 'rpi.local' for remoted probe-rs / espflash use. It does have access to mDNS; we don't.
+  # Let the host resolve '*.local'; useful for remoted probe-rs / espflash use.
   #
-  # Note: Lighter than doing this by using a bridging network adapter (the author's opinion).
+  # NOTE: The author does not really understand this. A simpler solution might exist (tried some; contributions welcome).
   #
   # TESTING:
-  #   After this, 'resolvectl status' (within VM) should show
+  #   Within the VM, 'resolvectl status' should show:
   #     - 'Link 2 (eth0)': 'DNS Domain: ~local'
   #
   - mode: system
