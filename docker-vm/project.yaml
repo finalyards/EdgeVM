@@ -1,0 +1,197 @@
+# yaml-language-server: $schema=none
+#
+# Note: There does not seem to be a schema available for Lima 2.2.0.
+#     Until there is one(?), see -> https://github.com/lima-vm/lima/blob/master/templates/default.yaml
+#
+minimumLimaVersion: 2.2.0
+
+# macOS defaults ('vz', 'virtiofs'); leaving as comments not to bother other host OS'es.
+vmType: "vz"
+#|mountType: "virtiofs"
+
+# See: https://github.com/lima-vm/lima/blob/master/templates/ubuntu-26.04.yaml
+#     - https://github.com/lima-vm/lima/blob/master/templates/_images/ubuntu-26.04.yaml
+#     - https://github.com/lima-vm/lima/blob/master/templates/_default/mounts.yaml
+#
+#base: "template:ubuntu-lts"
+base: "template:_images/ubuntu-lts"
+  # this excludes the default mapping; we do our own
+
+# Alternatively to 'base':
+#|images:
+#|  - location: "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-arm64.img"
+#|    arch: "aarch64"
+#|
+#|  # NOTE: Intel NOT TESTED
+#|  - location: "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
+#|    arch: "x86_64"
+
+vmOpts:
+  vz:
+    # [macOS]: Enables compatibility for amd64 containers. Optional.
+    rosetta:
+      enabled: true
+      binfmt: true
+
+# System Resources
+#
+cpus: 4
+memory: "8GiB"
+  # NOTE: consider 6GiB, #later tbd.
+disk: "15GiB"
+  # OS + Docker: 3.5GB; rest is for locally downloaded images etc.
+  #   - 10GiB was too little (with Rust, Cargo, one image: crossimage)
+
+user:
+  name: "lima"
+  home: "/home/{{.User}}"
+    # Lima defaults to '/home/{{.User}}.guest', we don't need the host/client disambiguation.
+
+param:
+  # Where provisioning sentinel files reside
+  #
+  # Requirements for the path:
+  #   - survives restarts ('/tmp/' does not)
+  #   - also the 'lima' user can write to (could be '/var', but need to add the user to 'wheel' group).
+  #
+  # NOTE: Expanding Lima (2.3.0-beta.0) parameters does not seem to be recursive: '{{.Home}}' cannot be used.
+  #
+  #STL_PATH: "{{.Home}}/.lima-provision"
+  STL_PATH: "/home/lima/.lima-provision"
+
+ssh:
+  localPort: 49926
+
+portForwards:
+  # Silence (some) warnings, when creating the VM
+  # Note: Rules read from top down (order matters)
+  - guestIP: "0.0.0.0"
+    proto: "udp"
+    ignore: true
+  - guestPort: 323
+    proto: "any"
+    ignore: true
+  # Application ports, plus Lima's own ssh
+  - guestPortRange: [1024, 65535]
+    proto: "tcp"
+
+#---
+# Provisioning scripts
+#
+# Template variables (Lima docs and a test run):
+#   {{.Home}}   /home/lima
+#   {{.Name}}   edge-vm
+#   {{.Hostname}} lima-edge-vm
+#   {{.UID}}    502
+#   {{.User}}   lima
+#   {{.Param.Key}} "<no value>" if empty
+#
+# ⭐️READ ME!!
+#     Provisioning happens *every time* a VM is stopped, restarted. This is to allow edits of the config to reach the VM
+#     (author's guess), but for our needs a _one time_ initialization is most useful and performant.
+#
+#     The documentation does ask the scripts to be idempotent. We go further, using sentinel files to see whether they
+#     ever succeeded (and skipping if did). You can *easily* tweak this by incrementing the "version" counter part of
+#     the sentinel name (i.e. if you make an edit, increment the "version"; no need to recreate the VM!).
+#
+# NOTES:
+#   - 'DEBIAN_FRONTEND=noninteractive' matters (for 'system' provisioning). Keep it.
+#   - 'apt-get update' is not needed, unless we change the sources (cloudinit has run it for a new instance).
+#
+provision:
+  # Prepare provision directory
+  - mode: system
+    #x-name: Prepare provision directory
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      
+      STL_PATH="{{.Param.STL_PATH}}"
+      mkdir -p "$STL_PATH"
+      chown {{.User}} "$STL_PATH"
+      
+      echo >&2 "Provisioning receipts at: $STL_PATH"
+
+  # Prepare user space
+  #   - make sure colored command line prompt is there, by copying templates from '/etc/skel/'
+  #
+  # NOTE: Losing the shell coloring is (somehow) connected to us not mounting all of host-side directories
+  #     (i.e. sandboxing).
+  #
+  - mode: user
+    #x-name: Prepare user space
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+  
+      SENTINEL="{{.Param.STL_PATH}}/user-skel.1.done"
+      if [ -f "$SENTINEL" ]; then
+        echo >&2 "user skeleton (skipped)"
+        exit 0
+      fi
+      echo >&2 "user skeleton ..."
+  
+      cp /etc/skel/.bashrc ~/
+      cp /etc/skel/.profile ~/
+  
+      touch "$SENTINEL"
+
+  # Docker installation
+  # https://docs.docker.com/engine/install/ubuntu/
+  #
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eu -o pipefail
+      export DEBIAN_FRONTEND=noninteractive
+
+      SENTINEL="{{.Param.STL_PATH}}/docker.1.done"
+      if [ -f "$SENTINEL" ]; then
+        echo >&2 "docker (skipped)"
+        exit 0
+      fi
+      echo >&2 "docker install ..."
+
+      # Add Docker's official GPG key:
+      apt-get install -y ca-certificates curl
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      chmod a+r /etc/apt/keyrings/docker.asc
+
+      # Add the repository:
+      cat <<EOF | sed 's/^ *//' | sudo tee /etc/apt/sources.list.d/docker.sources
+        Types: deb
+        URIs: https://download.docker.com/linux/ubuntu
+        Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+        Components: stable
+        Architectures: $(dpkg --print-architecture)
+        Signed-By: /etc/apt/keyrings/docker.asc
+      EOF
+
+      apt-get update
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+      # Allow access without 'sudo'
+      usermod -aG docker {{.User}}
+
+      touch "$SENTINEL"
+
+  # DID NOT WORK.
+  # This step makes sure 'docker' works as a command, without 'sudo'.
+  #
+  # Note: Change to groups ('docker') does not apply to the user session that _is already open_
+  #     in Lima (and will be used as the initial shell). Also, 'newgrp docker' needs an interactive shell.
+  #
+  #|- mode: user
+  #|  script: |
+  #|    #!/bin/bash
+  #|    set -eu -o pipefail
+  #|
+  #|    # If group 'docker' already active, we're fine
+  #|    if groups | grep -q '\bdocker\b'; then
+  #|      exit 0
+  #|    fi
+  #|
+  #|    echo &>2 "Activating 'docker' group for the user..."
+  #|    # ssh-agent/sshd updates the groups
+  #|    sudo systemctl restart sshd

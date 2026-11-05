@@ -27,6 +27,13 @@ For Rust embedded development; targeting the [ESP32-C6](https://documentation.es
 - USBIP client support
 -->
 
+### [docker-vm](./docker-vm/)
+
+For Docker.
+
+>Note: Also check out [Colima](https://colima.run).
+
+
 ### [mini-vm](./mini-vm/)
 
 For Linux development, including:
@@ -34,6 +41,7 @@ For Linux development, including:
 - Rust, 
 	- including WASM target
 - node.js, npm
+
 
 <!-- tbd.
 ### [cloud-vm](./cloud-vm/)
@@ -50,28 +58,27 @@ You can do your own setups easily, or use these as-is.
 
 ## Requirements
 
-<!--
-The author develops this on macOS `aarm64`. Using on Linux and/or Windows host is likely possible, but not tested.
--->
-
 - GNU Make (3.81); part of Apple Command Line Tools.
 
-	<!--	
 	```
 	% xcode-select --install
 	```
-	-->
 
 <!-- Developed on:
 - macOS 27
-- Lima VM 2.3.0-beta.0
+- Lima VM 2.3.0-rc.0
 -->
+
+>Currently only tested on macOS.
 
 
 ## Steps
 
-
 >Note: Read the `README` in the particular subfolder as well. They have additional instructions!
+
+Below, we start the `edge-vm` virtual machine. The steps are similar for all of them (`docker`, `mini`).
+
+
 
 ### Create a VM environment
 
@@ -104,11 +111,22 @@ $ exit
 % nano edge-vm/custom.mounts.list
 ```
 
-Add here a couple of paths you'd like to reach, from the Linux VM.
+Add here a couple of paths you'd like to reach, from the Linux VM. The changes are applied *next time* you run `make edge`.
 
-The mounts will be applied *next time you run `make edge`*.
+>**Note:**
+>
+>The `custom.mounts.list` is intended to be a **semi-permanent** list of your working folders, for a particular VM.
+>
+>To do ad-hoc changes, edit the created VM's YAML:
+>
+>- stop the VM
+>- `limactl edit edge-vm`
+>- at the tail of the YAML, edit the list of mounts
+>- save and allow a restart (answer `Y`) or `limactl start edge-vm`
+>- `limactl shell edge-vm`
 
-### A. Recreating the VM
+
+### Recreating the VM
 
 ```
 % limactl delete -f edge-vm
@@ -117,6 +135,7 @@ The mounts will be applied *next time you run `make edge`*.
 $ ls	# you can now see your mounted folders
 ```
 
+<!-- disabled; already mentioned above
 ### B. Editing the VM config
 
 You need to stop the VM before editing its configuration:
@@ -150,7 +169,7 @@ Save; restart:
 % limactl start edge-vm
 % limactl shell --workdir /home/lima/ABC edge-vm
 ```
-
+-->
 
 ### Exiting the VM
 
@@ -175,7 +194,7 @@ It's good to learn some Lima VM maintenance, though EdgeVM takes care of *creati
 
 ### `ssh` ports
 
-If you have multiple VM recipes, running at once, make sure that they claim different ssh ports (e.g. 49925).
+If you have multiple VM's running at once, make sure that they claim different ssh ports. The *different* recipies already do this, but if you - say - want to run `edge-vm` and `edge-vm2`, you'll need to provide a different port.
 
 
 ### Terminal profiles
@@ -202,15 +221,6 @@ As the console output now hints, let the creation run, and then (from host):
 ```
 
 This brings the creation log host-side, and you can excavate it in IDE. 😀
-
-
-## Next
-
-Have a look at the individual `README`s for the subfolders you will be using. They give more details about working with a certain development setup.
-
-### Remote Development
-
-[`extra/Remote Development`](extra/Remote Development.md) has information on how to set up Rust Rover IDE to do remote development with your projects.
 
 
 <!--

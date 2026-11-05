@@ -78,7 +78,7 @@ provision:
       export DEBIAN_FRONTEND=noninteractive
       
       apt-get update
-      apt install -y curl git pkg-config libssl-dev
+      apt-get install -y curl git pkg-config libssl-dev
 
       #🟡 Podman
       #   ❗️NOTE: THIS IS PODMAN 5.7 FOR NOW (6.0.2 not available via 'apt'; 31-Aug-26, 29-Jul-26)
@@ -86,7 +86,7 @@ provision:
 
       #🟡 Node.js via NodeSource
       curl -fsSL https://deb.nodesource.com/setup_26.x | bash -
-      apt install -y nodejs
+      apt-get install -y nodejs
       
       # 🟡Optimize 'node_modules' speed
       # Note: could do this in the 'mounts' section, once we in general can do mounts here... (the lack of '--mountOnly' in YAML)
@@ -109,7 +109,7 @@ provision:
       )
       
       # 🟡Just
-      apt install -y just
+      apt-get install -y just
 
       # DEBUG
       touch {{.Home}}/system.done

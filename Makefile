@@ -4,7 +4,7 @@
 #	- limactl
 #
 # Usage:
-#	$ [PROGRESS=1] [LOG_LEVEL=info|debug|warn] make {edge|mini|...}
+#	$ [PROGRESS=1] [LOG_LEVEL=info|debug|warn] make {edge|docker|mini|...}
 #
 VM_NAME :=
 _VM_USER := lima
@@ -63,7 +63,7 @@ _CUSTOM_MOUNTS:=$(VM_NAME)/custom.mounts.list
 #---
 # Shorthands
 #
-edge mini:
+edge docker mini:
 	@$(MAKE) vm VM_NAME=$@-vm
 
 #---
@@ -142,8 +142,12 @@ no_prior_vm:
 	  false; \
 	fi
 
+clean:
+	-rm tmp/*.yaml
+
 #---
 echo:
 	@echo $(_LIMACTL_FLAGS)
 
-.PHONY: edge mini vm limactl edit_ssh_config ssh_exists no_prior_vm echo
+.PHONY: edge docker mini \
+	vm limactl edit_ssh_config ssh_exists no_prior_vm clean echo

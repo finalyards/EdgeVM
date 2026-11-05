@@ -1,5 +1,6 @@
 # Troubleshooting
 
+<!-- should be gone (depends on Lima version)
 ## Errors when launching the VM shell
 
 ```
@@ -47,4 +48,4 @@ You might want to make aliases for such a command, or simply launch VM's to thei
 ### References
 
 - Lima documentation / Usage / [ssh](https://lima-vm.io/docs/usage/ssh/)
-
+-->

@@ -15,7 +15,7 @@
 #|    fi
 #|    log-to-host "USB/IP client ..."
 #|
-#|    apt install -y linux-tools-common linux-tools-$(uname -r)
+#|    apt-get install -y linux-tools-common linux-tools-$(uname -r)
 #|
 #|    modprobe vhci-hcd
 #|    # Ensure the module loads on restarts. Ubuntu 26.04 uses this instead of '/etc/modules'.

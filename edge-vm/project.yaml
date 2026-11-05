@@ -60,8 +60,6 @@ param:
 ssh:
   # Note: Variate the port per-project if you need to use multiple Remote Development sessions, simultaneously.
   localPort: 49925
-  # Default: only the host can access the VM.
-  loadDotSSHPubKeys: false
 
 portForwards:
   # Silence (some) warnings, when creating the VM
@@ -153,7 +151,7 @@ provision:
       log-to-host "Provisioning receipts at: $STL_PATH"
 
   # Prepare user space
-  #   - make sure colored command line prompt is there, by copying templates from '/etc/skel/.bashrc'
+  #   - make sure colored command line prompt is there, by copying templates from '/etc/skel/'
   #
   - mode: user
     #x-name: Prepare user space
@@ -161,12 +159,12 @@ provision:
       #!/bin/bash
       set -eux -o pipefail
 
-      SENTINEL="{{.Param.STL_PATH}}/bashrc_comment.1.done"
+      SENTINEL="{{.Param.STL_PATH}}/user-skel.1.done"
       if [ -f "$SENTINEL" ]; then
-        log-to-host "bashrc comment (skipped)"
+        log-to-host "user skeleton (skipped)"
         exit 0
       fi
-      log-to-host "bashrc comment ..."
+      log-to-host "user skeleton ..."
 
       cp /etc/skel/.bashrc ~/
       cp /etc/skel/.profile ~/
