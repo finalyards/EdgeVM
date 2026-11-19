@@ -1,6 +1,15 @@
 # Edge
 
+<!--
 ![](.images/icing.png)
+-->
+
+<div style="display: inline-block; filter: drop-shadow(0px 6px 10px rgba(0, 0, 0, 0.4));">
+  <img 
+    src=".images/icing.png" 
+    style="width: 400px; height: 200px; object-fit: cover; clip-path: circle(50%); display: block;"
+  >
+</div>
 
 <!-- AI prompt (Google Imagegen):
 Haluaisin luoda kuvan GitHub-reponi mieleenpainumisen parantamiseksi.
@@ -12,16 +21,15 @@ Eli:
 Kuva, jossa luistimen reuna viiltää jäätää ja siitä ehkä irtoaa hilettä. Tavoiteltavat aspektit: dynaaminen, hallittu peliliike.
 -->
 
-
 Collection of Lima VM recipes.
 
 ### [edge-vm](./edge-vm/)
 
 For Rust embedded development; targeting the [ESP32-C6](https://documentation.espressif.com/esp32-c6_datasheet_en.html).
 
-- Embassy
 - ESP-IDF: `esp-idf-hal`, `esp-idf-sys`, `esp-idf-svc`
 - `espflash` remoting
+- Embassy
 
 <!-- NOPE
 - USBIP client support
@@ -36,10 +44,9 @@ For Docker.
 
 ### [mini-vm](./mini-vm/)
 
-For Linux development, including:
+For Linux development:
 	
-- Rust, 
-	- including WASM target
+- Rust, including WASM target
 - node.js, npm
 
 
@@ -58,7 +65,9 @@ You can do your own setups easily, or use these as-is.
 
 ## Requirements
 
-- GNU Make (3.81); part of Apple Command Line Tools.
+- GNU Make (3.81)
+
+	Part of Apple Command Line Tools:
 
 	```
 	% xcode-select --install
@@ -66,7 +75,7 @@ You can do your own setups easily, or use these as-is.
 
 <!-- Developed on:
 - macOS 27
-- Lima VM 2.3.0-rc.0
+- Lima VM 2.3.0
 -->
 
 >Currently only tested on macOS.
@@ -74,9 +83,9 @@ You can do your own setups easily, or use these as-is.
 
 ## Steps
 
->Note: Read the `README` in the particular subfolder as well. They have additional instructions!
+>Note: Read the `README` in the particular subfolder as well. They have additional instructions.
 
-Below, we start the `edge-vm` virtual machine. The steps are similar for all of them (`docker`, `mini`).
+Below, we start the `edge-vm` virtual machine. The steps are similar for all of them (`docker-vm`, `mini-vm`).
 
 
 
@@ -84,7 +93,7 @@ Below, we start the `edge-vm` virtual machine. The steps are similar for all of 
 
 ```
 % make edge
-limactl start --name=edge-vm -y -- edge-vm/project.yaml
+[...]
 lima@lima-edge-vm:~$ 
 ```
 
@@ -113,15 +122,33 @@ $ exit
 
 Add here a couple of paths you'd like to reach, from the Linux VM. The changes are applied *next time* you run `make edge`.
 
+>Example:
+>
+>```
+># You can use comments
+>~/Git/SLED
+>~/Git/ezb-node
+>```
+
+These paths will show up as `/home/lima/SLED` etc.
+
 >**Note:**
 >
->The `custom.mounts.list` is intended to be a **semi-permanent** list of your working folders, for a particular VM.
+>The `custom.mounts.list` is intended to be a sticky list of your working folders, for a particular VM. It is only read when a new VM is created.
 >
->To do ad-hoc changes, edit the created VM's YAML:
+>To apply the mounts to an *existing* VM, edit its definition:
 >
->- stop the VM
+>- stop the VM: `limactl stop edge-vm`
 >- `limactl edit edge-vm`
 >- at the tail of the YAML, edit the list of mounts
+>
+>	```
+>	mounts:
+>   - location: "~/Git/SLED"
+>       mountPoint: "{{.Home}}/SLED"
+>       writable: true
+>	```
+>
 >- save and allow a restart (answer `Y`) or `limactl start edge-vm`
 >- `limactl shell edge-vm`
 
@@ -135,49 +162,20 @@ Add here a couple of paths you'd like to reach, from the Linux VM. The changes a
 $ ls	# you can now see your mounted folders
 ```
 
-<!-- disabled; already mentioned above
-### B. Editing the VM config
 
-You need to stop the VM before editing its configuration:
+## Extras
 
-```
-% limactl stop edge-vm
-```
+The created VM is a safety sandbox. Only the selected folders from your host should be reachable, so you can use this for:
 
-```
-% limactl edit edge-vm
-```
+- developing with untrusted third party libraries
+- agentic workflows
 
-Study the YAML. It's what declares the VM you are using.
+See: 
 
-At the end, there's a `mounts` section. If not, create one:
+- [`extra/Remote development`](extra/Remote%20development.md)
+- [`extra/Agentic development`](extra/Agentic%20development.md)
 
-```
-mounts:
-  - location: "~/Git/ABC"
-    mountPoint: "{{.Home}}/ABC"
-    writable: true
-```
-
->Obviously something you have on *your* computer.
-
-The convention with Edge VM is to map host folders to the main VM home level, e.g. `/home/lima/SLED`. This is why you don't need to give more than your host folder name in the `custom.mounts.list` file. 
-
-Save; restart:
-
-```
-% limactl start edge-vm
-% limactl shell --workdir /home/lima/ABC edge-vm
-```
--->
-
-### Exiting the VM
-
-To exit, just:
-
-```
-$ exit
-```
+The author wishes you find a personalized workflow that matches your goals. 
 
 
 ## Advanced
