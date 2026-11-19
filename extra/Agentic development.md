@@ -3,7 +3,13 @@
 Instructions on how to use Claude Code on a VM.
 
 
-## Installing
+## Setting up Claude Code
+
+### Preparation
+
+For agentic work, 12GB per VM is a decent amount, 8GB is not. You might need to raise the default of the VM's to do agentic work.
+
+### Installing
 
 >Within the VM.
 
