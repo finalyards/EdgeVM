@@ -27,16 +27,16 @@ $ claude --version
 ```
 
 
-## Watershed. Claude Pro / Max vs. Anthropic Console
+## Watershed. Claude Pro vs. Anthropic Console
 
 You can use Claude Code with either of two Anthropic offerings. Their intended audience, cost profile etc. are different but the underlying model(s) are the same.
 
 ||billing|sign-in|use case|access control|use restrictions|
 |---|---|---|---|---|---|
-|Claude Pro / Max|subscription|OAuth via browser|individual developer|coarse|5h rolling window|
+|Claude Pro|subscription|OAuth via browser|individual developer|coarse|5h rolling window|
 |Anthropic Console|credits|API keys|organizations, headless use (e.g. CI/CD)|fine|credit balance; rate limits|
 
->There are also other differences. The Anthropic Console is intended for *organisations* with *teams* and multiple users. The Claude Pro/Max is intended for individual users and lacks access management tools.
+>There are also other differences. The Anthropic Console is intended for *organisations* with *teams* and multiple users. The Claude Pro is intended for individual users and lacks access management tools.
 
 You may already have one of these. If you don't, pick either.. Instructions on authentication (below) differ based on your choice.
 
